@@ -211,3 +211,11 @@ socket.on('busLocationUpdate', (data) => {
         }
     }
 });
+
+// ==========================================
+// دالة تسجيل الخروج للراكب
+// ==========================================
+function logout() {
+    localStorage.removeItem('currentUser');
+    window.location.href = '/login.html';
+}
