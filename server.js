@@ -79,25 +79,26 @@ app.post('/api/login', async (req, res) => {
 });
 
 // ==========================================
-// --- [جديد] جلب جدول رحلات السائق لليوم ---
+// --- جلب كل رحلات السائق المجدولة في المستقبل ---
 // ==========================================
 app.get('/api/trips/driver/:id/today', async (req, res) => {
     const driverId = req.params.id;
     try {
-        // يجلب كل رحلات السائق لتاريخ اليوم، مرتبة حسب الوقت
+        // جلب الرحلات التي حالتها pending أو active، ووقت انطلاقها من الآن فصاعداً (أو الحالية)
         const result = await db.query(
             `SELECT t.id, t.route_id, r.name as route_name, b.plate_number as bus_plate, t.status, t.scheduled_time 
              FROM trips t
              JOIN routes r ON t.route_id = r.id
              JOIN buses b ON t.bus_id = b.id
              WHERE t.driver_id = $1 
-             AND DATE(t.scheduled_time) = CURRENT_DATE
+             AND t.scheduled_time >= NOW()
              ORDER BY t.scheduled_time ASC`,
             [driverId]
         );
         res.json(result.rows);
     } catch (err) {
-        res.status(500).json({ error: 'خطأ في جلب جدول اليوم' });
+        console.error(err);
+        res.status(500).json({ error: 'خطأ في جلب جدول الرحلات' });
     }
 });
 
