@@ -6,30 +6,67 @@ let currentRouteStops = [];
 let selectedRouteId = null;
 let isAlertActive = false;
 
+// ==========================================
+// التحميل الأولي: جلب المسارات النشطة (مع دعم التصنيف الذكي)
+// ==========================================
 window.addEventListener('DOMContentLoaded', async () => {
     try {
-        const res = await fetch('/api/routes');
+        // محاولة جلب المسارات والحافلات النشطة والمصنفة
+        const res = await fetch('/api/passenger/routes?audience=all');
         const routes = await res.json();
         
-        document.getElementById('routeSelector').innerHTML = '<option value="" disabled selected>-- اختر المسار --</option>' + 
-            routes.map(r => `<option value="${r.id}">${r.route_name}</option>`).join('');
+        const selector = document.getElementById('routeSelector');
+        if (selector) {
+            selector.innerHTML = '<option value="" disabled selected>-- اختر المسار والرحلة المتاحة --</option>' + 
+                routes.map(r => {
+                    const rId = r.route_id || r.id;
+                    const rName = r.route_name || r.name;
+                    const busPlateStr = r.bus_plate ? ` (باص: ${r.bus_plate})` : '';
+                    return `<option value="${rId}">${rName}${busPlateStr}</option>`;
+                }).join('');
+        }
     } catch (err) {
-        console.error("خطأ في جلب المسارات", err);
+        console.error("تعذر جلب المسارات المصنفة، جاري محاولة الجلب البديل...", err);
+        // آلية احتياطية (Fallback) لجلب المسارات العادية لضمان عدم توقف الواجهة
+        try {
+            const resFallback = await fetch('/api/routes');
+            const routesFallback = await resFallback.json();
+            const selector = document.getElementById('routeSelector');
+            if (selector) {
+                selector.innerHTML = '<option value="" disabled selected>-- اختر المسار --</option>' + 
+                    routesFallback.map(r => `<option value="${r.id}">${r.route_name}</option>`).join('');
+            }
+        } catch (e) {
+            console.error("خطأ نهائي في جلب المسارات", e);
+        }
     }
 });
 
+// ==========================================
+// بدء تتبع المسار المختار
+// ==========================================
 function trackSelectedRoute() {
-    selectedRouteId = document.getElementById('routeSelector').value;
+    const routeSelector = document.getElementById('routeSelector');
+    if (!routeSelector) return;
+    
+    selectedRouteId = routeSelector.value;
     if (!selectedRouteId) return;
 
-    document.getElementById('passengerMap').style.display = 'block';
-    document.getElementById('stopsScheduleContainer').style.display = 'block';
-    document.getElementById('infoCard').innerText = '🔍 جاري تحديد موقعك ومحطات الخط...';
+    const mapEl = document.getElementById('passengerMap');
+    const scheduleEl = document.getElementById('stopsScheduleContainer');
+    const infoCardEl = document.getElementById('infoCard');
+
+    if (mapEl) mapEl.style.display = 'block';
+    if (scheduleEl) scheduleEl.style.display = 'block';
+    if (infoCardEl) infoCardEl.innerText = '🔍 جاري تحديد موقعك ومحطات الخط...';
 
     initPassengerMap();
     loadRouteStopsForPassenger(selectedRouteId);
 }
 
+// ==========================================
+// تهيئة خريطة الراكب ومتابعة موقع GPS الخاص به
+// ==========================================
 function initPassengerMap() {
     if (!passengerMap) {
         passengerMap = L.map('passengerMap').setView([31.95, 35.91], 13);
@@ -56,12 +93,17 @@ function initPassengerMap() {
     }
 }
 
+// ==========================================
+// جلب محطات المسار وعرضها للراكب
+// ==========================================
 async function loadRouteStopsForPassenger(routeId) {
     try {
         const res = await fetch(`/api/stops/${routeId}`);
         currentRouteStops = await res.json();
 
         const scheduleContainer = document.getElementById('stopsScheduleContainer');
+        if (!scheduleContainer) return;
+        
         scheduleContainer.innerHTML = '';
 
         currentRouteStops.forEach((stop) => {
@@ -77,34 +119,46 @@ async function loadRouteStopsForPassenger(routeId) {
             `;
         });
 
+        const infoCardEl = document.getElementById('infoCard');
         if (currentRouteStops.length > 0) {
             passengerMap.setView([currentRouteStops[0].latitude, currentRouteStops[0].longitude], 14);
-            document.getElementById('infoCard').innerText = '🟢 النظام نشط - يتم تتبع موقع الحافلة الآن';
+            if (infoCardEl) infoCardEl.innerText = '🟢 النظام نشط - يتم تتبع موقع الحافلة الآن';
         }
     } catch (err) {
         console.error("خطأ في جلب المحطات", err);
     }
 }
 
+// ==========================================
+// فحص اقتراب الراكب من المحطات (ضمن نطاق 100 متر)
+// ==========================================
 function checkProximityToStops(passengerLat, passengerLng) {
     let nearStationBox = document.getElementById('stationAlertBox');
+    let nearestStationText = document.getElementById('nearestStationText');
     let foundNear = false;
 
     currentRouteStops.forEach(stop => {
         let distance = getDistanceFromLatLonInMeters(passengerLat, passengerLng, stop.latitude, stop.longitude);
         if (distance <= 100) { 
             foundNear = true;
-            document.getElementById('nearestStationText').innerText = `📍 أنت قريب جداً من محطة: "${stop.stop_name}" (${Math.round(distance)} متر)`;
+            if (nearestStationText) {
+                nearestStationText.innerText = `📍 أنت قريب جداً من محطة: "${stop.stop_name}" (${Math.round(distance)} متر)`;
+            }
         }
     });
 
-    if (foundNear) {
-        nearStationBox.style.display = 'block';
-    } else if (!isAlertActive) {
-        nearStationBox.style.display = 'none';
+    if (nearStationBox) {
+        if (foundNear) {
+            nearStationBox.style.display = 'block';
+        } else if (!isAlertActive) {
+            nearStationBox.style.display = 'none';
+        }
     }
 }
 
+// ==========================================
+// دوال حساب المسافات الجغرافية
+// ==========================================
 function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
     var R = 6371000;
     var dLat = deg2rad(lat2 - lat1);
@@ -119,24 +173,35 @@ function deg2rad(deg) {
     return deg * (Math.PI / 180);
 }
 
+// ==========================================
+// نظام تنبيه السائق من الراكب
+// ==========================================
 function togglePassengerAlert() {
     const btn = document.getElementById('alertDriverBtn');
     isAlertActive = !isAlertActive;
 
     if (isAlertActive) {
-        btn.classList.add('active');
-        btn.innerText = '⚠️ تم إرسال التنبيه للسائق (اضغط للإلغاء)';
+        if (btn) {
+            btn.classList.add('active');
+            btn.innerText = '⚠️ تم إرسال التنبيه للسائق (اضغط للإلغاء)';
+        }
         socket.emit('passengerAlert', { routeId: selectedRouteId, message: 'تنبيه: يوجد راكب ينتظر في المحطة!' });
     } else {
-        btn.classList.remove('active');
-        btn.innerText = '🚨 تنبيه السائق بوجود راكب في المحطة';
+        if (btn) {
+            btn.classList.remove('active');
+            btn.innerText = '🚨 تنبيه السائق بوجود راكب في المحطة';
+        }
         socket.emit('passengerCancelAlert', { routeId: selectedRouteId });
     }
 }
 
-// استقبال موقع الحافلة اللحظي ورسمه على خريطة الراكب
+// ==========================================
+// استقبال موقع الحافلة اللحظي عبر الـ WebSockets ورسمه
+// ==========================================
 socket.on('busLocationUpdate', (data) => {
     if (data.routeId == selectedRouteId) {
+        if (!passengerMap) return;
+        
         if (!busMarker) {
             busMarker = L.marker([data.lat, data.lng], {
                 icon: L.divIcon({ className: 'bus-moving-icon', html: '🚍', iconSize: [32, 32] })

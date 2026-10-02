@@ -102,6 +102,44 @@ app.get('/api/trips/driver/:id/today', async (req, res) => {
 });
 
 // ==========================================
+// --- [جديد] جلب المسارات والحافلات النشطة حسب فئة الراكب ---
+// ==========================================
+app.get('/api/passenger/routes', async (req, res) => {
+    const audience = req.query.audience; // 'student' أو 'employee' أو 'all'
+    try {
+        let query = `
+            SELECT r.id as route_id, r.route_name, r.description, r.target_audience,
+                   t.id as trip_id, t.status, t.scheduled_time, b.plate_number as bus_plate, b.capacity,
+                   u.full_name as driver_name, u.phone as driver_phone
+            FROM bus_routes r
+            JOIN trips t ON r.id = t.route_id
+            JOIN buses b ON t.bus_id = b.id
+            JOIN users u ON t.driver_id = u.id
+            WHERE t.status IN ('pending', 'active')
+        `;
+        
+        let queryParams = [];
+        // إذا كان الراكب طالباً، نُظهر له مسارات الطلاب والـ all فقط
+        if (audience === 'student') {
+            query += ` AND r.target_audience IN ('student', 'all')`;
+        } 
+        // إذا كان موظفاً، يرى مسارات الموظفين والطلاب والـ all
+        else if (audience === 'employee') {
+            query += ` AND r.target_audience IN ('employee', 'student', 'all')`;
+        }
+        // الـ admin أو غيره يرى الكل
+
+        query += ` ORDER BY t.scheduled_time ASC`;
+
+        const result = await db.query(query, queryParams);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('خطأ في جلب مسارات الركاب:', err);
+        res.status(500).json({ error: 'خطأ في الخادم' });
+    }
+});
+
+// ==========================================
 // --- [تعديل] مسار تحديث حالة الرحلة ليقبل الملاحظات ---
 // ==========================================
 app.patch('/api/trips/:id/status-with-notes', async (req, res) => {
