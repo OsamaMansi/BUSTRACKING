@@ -49,6 +49,10 @@
             <input type="hidden" id="currentScheduledTime"> <!-- مخفي للبرمجة -->
 
             <button id="btnStart" class="btn btn-start" onclick="changeTripStatus('active')" style="display: none;">▶️ بدء الرحلة</button>
+
+<button type="button" id="btnDwellStop" onclick="startDwellCountdown(120)" style="background: #17a2b8; display:none; width:100%; margin-top:8px;">🛑 توقف مؤقت في المحطة (مكوث)</button>
+<div id="dwellTimerDisplay" style="text-align: center; font-weight: bold; color: #d9534f; margin-top: 5px; display: none;"></div>
+
             <button id="btnComplete" class="btn btn-complete" onclick="changeTripStatus('completed')" style="display: none;">✔️ إنهاء الرحلة</button>
             <button id="btnCancel" class="btn-cancel" onclick="cancelTrip()" style="display: none;">❌ طارئ: إلغاء الرحلة</button>
         </div>

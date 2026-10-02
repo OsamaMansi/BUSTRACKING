@@ -25,7 +25,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     await loadAvailableTripsCards();
 });
 
-// دالة جلب وعرض رحلات الحافلات كبطاقات في واجهة الراكب
+// دالة جلب وعرض رحلات الحافلات كبطاقات تفصيلية في واجهة الراكب
 async function loadAvailableTripsCards() {
     try {
         const res = await fetch('/api/passenger/routes?audience=all');
@@ -44,10 +44,31 @@ async function loadAvailableTripsCards() {
             const timeStr = t.scheduled_time ? new Date(t.scheduled_time).toLocaleString('ar-JO', { dateStyle: 'short', timeStyle: 'short' }) : 'غير محدد';
             let badge = t.target_audience === 'student' ? '🎓 للطلاب' : t.target_audience === 'employee' ? '💼 للموظفين' : '🌐 للجميع';
 
+            // معالجة حالات الرحلة وتوليد الشارة المناسبة
+            let statusBadge = '';
+            let statusText = t.status;
+            
+            if (statusText === 'pending') {
+                statusBadge = '<span style="background: #ffc107; color: black; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">⏳ مجدولة</span>';
+            } else if (statusText === 'active') {
+                statusBadge = '<span style="background: #28a745; color: white; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">🟢 جارية الآن</span>';
+            } else if (statusText === 'stopped') {
+                statusBadge = '<span style="background: #17a2b8; color: white; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">⏸️ متوقفة مؤقتاً</span>';
+            } else if (statusText === 'cancelled') {
+                statusBadge = '<span style="background: #dc3545; color: white; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">❌ ملغاة</span>';
+            } else if (statusText === 'postponed') {
+                statusBadge = '<span style="background: #6c757d; color: white; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">⏰ مؤجلة</span>';
+            } else if (statusText === 'delayed') {
+                const delayMins = t.delay_minutes || 15; // قيمة افتراضية أو مستخرجة من قاعدة البيانات
+                statusBadge = `<span style="background: #fd7e14; color: white; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">⚠️ متأخرة (${delayMins} دقيقة)</span>`;
+            } else {
+                statusBadge = `<span style="background: #343a40; color: white; padding: 3px 8px; border-radius: 4px; font-size: 12px;">${statusText}</span>`;
+            }
+
             html += `
                 <div class="trip-card" onclick="selectTripAndTrack(${t.route_id}, '${t.route_name}', '${t.bus_plate}', '${t.driver_name}')">
-                    <div class="trip-title">${t.route_name} <span style="font-size: 12px; float: left; background: #e9ecef; padding: 2px 6px; border-radius: 4px; color: #333;">${badge}</span></div>
-                    <div class="info-text">🚌 الحافلة رقم اللوحة: <strong>${t.bus_plate}</strong> (السعة: ${t.capacity})</div>
+                    <div class="trip-title">${t.route_name} <span style="float: left;">${statusBadge}</span></div>
+                    <div class="info-text" style="margin-top: 8px;">🚌 الحافلة: <strong>${t.bus_plate}</strong> | الفئة: ${badge}</div>
                     <div class="info-text">👨‍✈️ السائق: ${t.driver_name}</div>
                     <div class="info-text">🕒 موعد الانطلاق: <span style="color: #d9534f; font-weight: bold;">${timeStr}</span></div>
                 </div>

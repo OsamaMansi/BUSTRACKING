@@ -4,8 +4,12 @@ let driverMap = null;
 let driverMarker = null;
 let watchId = null;
 let allDriverTrips = [];
-let countdownInterval = null; // متغير للعداد التناقصي
+let countdownInterval = null; // عداد موعد الانطلاق
+let dwellInterval = null;     // عداد المكوث في المحطة
 
+// ==========================================
+// 1. التحميل الأولي والتعرف على السائق
+// ==========================================
 window.addEventListener('DOMContentLoaded', async () => {
     const userStr = localStorage.getItem('currentUser');
     if (!userStr) { window.location.href = '/login.html'; return; }
@@ -26,6 +30,9 @@ function logout() {
     window.location.href = '/login.html';
 }
 
+// ==========================================
+// 2. جلب وتوزيع بيانات رحلات السائق
+// ==========================================
 async function loadDriverTrip() {
     if (!currentDriverId) return;
 
@@ -41,6 +48,7 @@ async function loadDriverTrip() {
         if (allDriverTrips.length > 0) {
             scheduleBox.style.display = 'block';
             
+            // استخراج الرحلة الحالية (الجارية أو أول رحلة مجدولة)
             const currentTrip = allDriverTrips.find(t => t.status === 'active') || allDriverTrips.find(t => t.status === 'pending');
 
             if (currentTrip) {
@@ -48,6 +56,7 @@ async function loadDriverTrip() {
                 tripCard.style.display = 'block';
                 mapDiv.style.display = 'block';
 
+                // تعبئة البيانات المخفية والظاهرة
                 document.getElementById('currentTripId').value = currentTrip.id;
                 document.getElementById('currentRouteId').value = currentTrip.route_id;
                 document.getElementById('currentScheduledTime').value = currentTrip.scheduled_time;
@@ -61,38 +70,58 @@ async function loadDriverTrip() {
                     document.getElementById('lblScheduledTime').innerText = "غير محدد";
                 }
 
+                // تهيئة الخريطة للمسار الحالي
                 initDriverMap(currentTrip.route_id);
 
+                // التحكم بظهور الأزرار حسب حالة الرحلة
                 const btnStart = document.getElementById('btnStart');
                 const btnComplete = document.getElementById('btnComplete');
                 const btnCancel = document.getElementById('btnCancel');
+                const btnDwell = document.getElementById('btnDwellStop');
+                const dwellTimer = document.getElementById('dwellTimerDisplay');
 
                 if (currentTrip.status === 'pending') {
                     document.getElementById('lblStatus').innerText = 'مجدولة ⏳';
                     if(btnStart) btnStart.style.display = 'block';
                     if(btnCancel) btnCancel.style.display = 'block';
                     if(btnComplete) btnComplete.style.display = 'none';
+                    if(btnDwell) btnDwell.style.display = 'none';
+                    if(dwellTimer) dwellTimer.style.display = 'none';
                 } else if (currentTrip.status === 'active') {
                     document.getElementById('lblStatus').innerText = 'جارية 🟢';
                     if(btnStart) btnStart.style.display = 'none';
                     if(btnCancel) btnCancel.style.display = 'block';
                     if(btnComplete) btnComplete.style.display = 'block';
+                    // إظهار زر التوقف المؤقت عندما تكون الرحلة جارية
+                    if(btnDwell) btnDwell.style.display = 'block';
                 }
             } else {
-                tripCard.style.display = 'none'; mapDiv.style.display = 'none'; noTripMsg.style.display = 'block';
+                // إذا لم توجد رحلة حالية أو مجدولة
+                tripCard.style.display = 'none'; 
+                mapDiv.style.display = 'none'; 
+                noTripMsg.style.display = 'block';
                 if (watchId) navigator.geolocation.clearWatch(watchId);
                 if (countdownInterval) clearInterval(countdownInterval);
+                if (dwellInterval) clearInterval(dwellInterval);
             }
 
+            // عرض قائمة الرحلات السفلية وتصفيتها
             filterDriverTrips();
 
         } else {
-            tripCard.style.display = 'none'; mapDiv.style.display = 'none'; scheduleBox.style.display = 'none'; noTripMsg.style.display = 'block';
+            tripCard.style.display = 'none'; 
+            mapDiv.style.display = 'none'; 
+            scheduleBox.style.display = 'none'; 
+            noTripMsg.style.display = 'block';
         }
-    } catch (err) { console.error(err); }
+    } catch (err) { console.error('خطأ في جلب بيانات الرحلات:', err); }
 }
 
-// دالة العداد التناقصي للوقت المجدول
+// ==========================================
+// 3. دوال العدادات (موعد الانطلاق + وقت المكوث)
+// ==========================================
+
+// عداد موعد الانطلاق المجدول
 function startCountdownTimer(targetTimeStr) {
     if (countdownInterval) clearInterval(countdownInterval);
     const targetTime = new Date(targetTimeStr).getTime();
@@ -117,6 +146,42 @@ function startCountdownTimer(targetTimeStr) {
     }, 1000);
 }
 
+// عداد التوقف المؤقت والمكوث في المحطة
+function startDwellCountdown(durationSeconds = 120) {
+    const timerDisplay = document.getElementById('dwellTimerDisplay');
+    const btnDwell = document.getElementById('btnDwellStop');
+    if (!timerDisplay) return;
+
+    timerDisplay.style.display = 'block';
+    if(btnDwell) {
+        btnDwell.style.background = '#6c757d';
+        btnDwell.innerText = '🚶‍♂️ السائق في وضع المكوث / التوقف المؤقت';
+    }
+    
+    let remainingTime = durationSeconds;
+
+    if (dwellInterval) clearInterval(dwellInterval);
+
+    dwellInterval = setInterval(() => {
+        const mins = Math.floor(remainingTime / 60);
+        const secs = remainingTime % 60;
+        timerDisplay.innerHTML = `⏱️ وقت المكوث المتبقي بالمحطة: ${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+
+        if (remainingTime <= 0) {
+            clearInterval(dwellInterval);
+            timerDisplay.innerHTML = "🔔 انتهى وقت المكوث المقدر! يمكنك متابعة المسير.";
+            if(btnDwell) {
+                btnDwell.style.background = '#17a2b8';
+                btnDwell.innerText = '🛑 توقف مؤقت جديد في المحطة';
+            }
+        }
+        remainingTime--;
+    }, 1000);
+}
+
+// ==========================================
+// 4. تصفية وعرض قائمة الرحلات
+// ==========================================
 function filterDriverTrips() {
     const filterSelect = document.getElementById('tripFilterSelect');
     const filterValue = filterSelect ? filterSelect.value : 'pending';
@@ -152,6 +217,9 @@ function filterDriverTrips() {
     scheduleList.innerHTML = scheduleHtml;
 }
 
+// ==========================================
+// 5. إدارة حالة الرحلة (بدء، إنهاء، إلغاء)
+// ==========================================
 async function changeTripStatus(newStatus) {
     const tripId = document.getElementById('currentTripId').value;
     const scheduledTimeStr = document.getElementById('currentScheduledTime').value;
@@ -163,11 +231,13 @@ async function changeTripStatus(newStatus) {
         const now = new Date();
         const diffHours = (scheduledTime - now) / (1000 * 60 * 60);
 
+        // منع البدء قبل 4 ساعات
         if (diffHours > 4) {
             alert("⚠️ لا يمكنك بدء الرحلة قبل موعدها بأكثر من 4 ساعات.");
             return;
         }
 
+        // إجبار السائق على كتابة ملاحظة إذا بدأ الرحلة مبكراً
         if (diffHours > 0) {
             const reason = prompt("أنت تقوم ببدء الرحلة قبل موعدها المجدول. يرجى كتابة السبب (إلزامي):");
             if (reason === null || reason.trim() === "") {
@@ -189,6 +259,7 @@ async function changeTripStatus(newStatus) {
     if (res.ok) {
         if(newStatus === 'completed' && watchId) navigator.geolocation.clearWatch(watchId);
         if(countdownInterval) clearInterval(countdownInterval);
+        if(dwellInterval) clearInterval(dwellInterval);
         loadDriverTrip();
     }
 }
@@ -208,10 +279,14 @@ async function cancelTrip() {
         alert("تم إلغاء الرحلة بنجاح.");
         if (watchId) navigator.geolocation.clearWatch(watchId);
         if (countdownInterval) clearInterval(countdownInterval);
+        if (dwellInterval) clearInterval(dwellInterval);
         loadDriverTrip();
     }
 }
 
+// ==========================================
+// 6. تهيئة الخريطة وتتبع الـ GPS اللحظي
+// ==========================================
 async function initDriverMap(routeId) {
     if (!driverMap) {
         driverMap = L.map('driverMap').setView([31.95, 35.91], 13);
@@ -225,7 +300,7 @@ async function initDriverMap(routeId) {
             L.marker([s.latitude, s.longitude]).addTo(driverMap).bindPopup(`<b>محطة: ${s.stop_name}</b>`);
         });
         if (stops.length > 0) driverMap.setView([stops[0].latitude, stops[0].longitude], 14);
-    } catch(err) {}
+    } catch(err) { console.error("خطأ في جلب المحطات:", err); }
 
     if (navigator.geolocation) {
         if (watchId) navigator.geolocation.clearWatch(watchId);
@@ -235,8 +310,12 @@ async function initDriverMap(routeId) {
                 driverMarker = L.marker([lat, lng], { icon: L.divIcon({ className: 'bus-icon', html: '🚌', iconSize: [30, 30] }) }).addTo(driverMap);
             } else { driverMarker.setLatLng([lat, lng]); }
             driverMap.panTo([lat, lng]);
-            const routeId = document.getElementById('currentRouteId').value;
-            if (routeId) socket.emit('updateBusLocation', { routeId, lat, lng, driverId: currentDriverId });
+            
+            // إرسال الإحداثيات اللحظية عبر Socket.io ليراها الركاب
+            const currentRouteIdVal = document.getElementById('currentRouteId').value;
+            if (currentRouteIdVal) {
+                socket.emit('updateBusLocation', { routeId: currentRouteIdVal, lat, lng, driverId: currentDriverId });
+            }
         }, err => console.log(err), { enableHighAccuracy: true });
     }
 }

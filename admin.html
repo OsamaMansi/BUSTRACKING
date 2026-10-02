@@ -100,12 +100,13 @@
                     <input type="email" id="email" placeholder="البريد الإلكتروني (اختياري)">
                     <input type="text" id="phone" placeholder="رقم الهاتف" required>
                     <input type="password" id="password" placeholder="كلمة المرور">
-                    <select id="role" required>
-                        <option value="" disabled selected>-- اختر الصلاحية --</option>
-                        <option value="driver">سائق</option>
-                        <option value="passenger">راكب</option>
-                        <option value="admin">مدير نظام</option>
-                    </select>
+<select id="role" required>
+    <option value="" disabled selected>-- اختر الصلاحية --</option>
+    <option value="driver">سائق</option>
+    <option value="passenger">راكب</option>
+    <option value="admin">مدير نظام</option>
+    <option value="escort">مراقب حركة 🧑‍🏫</option> <!-- ⬅️ الإضافة الجديدة هنا -->
+</select>
                     <button type="submit" class="btn-add" id="userSubmitBtn">➕ حفظ</button>
                     <button type="button" class="btn-delete" style="display:none; width:100%; margin-top:10px;" id="userCancelBtn" onclick="resetUserForm()">❌ إلغاء</button>
                 </form>

@@ -210,7 +210,17 @@ function sendAlertToDriver(driverName, driverId) {
 let isEditingUser = false;
 async function fetchUsers() {
     const res = await fetch('/api/users'); const users = await res.json();
-    document.getElementById('usersTableBody').innerHTML = users.map(u => `<tr>
+    document.getElementById('usersTableBody').innerHTML = users.map(u => {
+        // ترجمة الصلاحيات للعربية للعرض في الجدول
+        let roleAr = '';
+        if(u.role === 'driver') roleAr = 'سائق 🚌';
+        else if(u.role === 'passenger') roleAr = 'راكب 🧍‍♂️';
+        else if(u.role === 'admin') roleAr = 'مدير نظام ⚙️';
+        else if(u.role === 'escort') roleAr = 'مراقب 🧑‍🏫';
+        else roleAr = u.role;
+
+        return`<tr>
+
         <td>${u.full_name}</td><td>${u.phone || '-'}</td><td>${u.email || '-'}</td><td>${u.role}</td>
         <td>${u.is_active ? '<span class="status-active">فعال</span>' : '<span class="status-inactive">موقوف</span>'}</td>
         <td>
