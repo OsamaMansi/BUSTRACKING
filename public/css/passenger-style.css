@@ -1,0 +1,122 @@
+/* ================= تصميم تطبيق الراكب ================= */
+body { 
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+    background-color: #f4f7f6; 
+    margin: 0; 
+    padding: 0; 
+    display: flex; 
+    justify-content: center; 
+}
+
+.mobile-container { 
+    width: 100%; 
+    max-width: 480px; 
+    background: white; 
+    min-height: 100vh; 
+    box-shadow: 0 0 15px rgba(0,0,0,0.1); 
+    display: flex; 
+    flex-direction: column; 
+}
+
+.header { 
+    background: #007bff; 
+    color: white; 
+    padding: 15px; 
+    text-align: center; 
+}
+
+.header h1 { 
+    margin: 0; 
+    font-size: 20px; 
+}
+
+.content { 
+    padding: 15px; 
+    flex: 1; 
+    display: flex; 
+    flex-direction: column; 
+    gap: 15px; 
+}
+
+.select-box { 
+    background: #e9ecef; 
+    padding: 12px; 
+    border-radius: 8px; 
+    border: 1px solid #ced4da; 
+}
+
+select { 
+    width: 100%; 
+    padding: 10px; 
+    font-size: 15px; 
+    border-radius: 5px; 
+    border: 1px solid #ccc; 
+}
+
+#passengerMap { 
+    width: 100%; 
+    height: 260px; 
+    border-radius: 8px; 
+    border: 2px solid #007bff; 
+}
+
+.alert-station-box { 
+    background: #fff3cd; 
+    border: 2px solid #ffc107; 
+    padding: 15px; 
+    border-radius: 8px; 
+    text-align: center; 
+    display: none; 
+}
+
+.btn-alert-driver { 
+    background: #fd7e14; 
+    color: white; 
+    border: none; 
+    padding: 12px 20px; 
+    font-size: 16px; 
+    font-weight: bold; 
+    border-radius: 8px; 
+    cursor: pointer; 
+    width: 100%; 
+    margin-top: 10px; 
+    transition: 0.3s; 
+}
+
+.btn-alert-driver.active { 
+    background: #dc3545; 
+    animation: pulse 1s infinite; 
+}
+
+@keyframes pulse { 
+    0% { transform: scale(1); } 
+    50% { transform: scale(1.03); } 
+    100% { transform: scale(1); } 
+}
+
+.stops-schedule { 
+    background: #f8f9fa; 
+    border-radius: 8px; 
+    padding: 10px; 
+    max-height: 200px; 
+    overflow-y: auto; 
+    border: 1px solid #ddd; 
+}
+
+.stop-item { 
+    display: flex; 
+    justify-content: space-between; 
+    padding: 8px; 
+    border-bottom: 1px solid #eee; 
+    font-size: 14px; 
+}
+
+.info-card { 
+    background: #f8f9fa; 
+    padding: 10px; 
+    border-radius: 8px; 
+    font-size: 14px; 
+    text-align: center; 
+    font-weight: bold; 
+    color: #495057; 
+}

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تطبيق الركاب - تتبع الحافلات الذكي</title>
+    <!-- مكتبة الخرائط Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <!-- ملف التصميم المنفصل -->
+    <link rel="stylesheet" href="/css/passenger-style.css" />
+</head>
+<body>
+
+<div class="mobile-container">
+    <div class="header">
+        <h1>🚍 تتبع الحافلة للركاب</h1>
+    </div>
+
+    <div class="content">
+        <!-- اختيار المسار -->
+        <div class="select-box">
+            <label style="display:block; margin-bottom:5px; font-weight:bold; font-size:14px;">اختر المسار المراد السفر عليه:</label>
+            <select id="routeSelector" onchange="trackSelectedRoute()">
+                <option value="" disabled selected>-- اختر خط السير --</option>
+            </select>
+        </div>
+
+        <!-- معلومات الحالة -->
+        <div id="infoCard" class="info-card">اختر مساراً لعرض الخريطة والحافلات المتاحة</div>
+
+        <!-- خريطة الراكب الحية -->
+        <div id="passengerMap" style="display: none;"></div>
+
+        <!-- زر تنبيه السائق (يظهر عند الاقتراب من المحطة ضمن 100 متر) -->
+        <div id="stationAlertBox" class="alert-station-box">
+            <div id="nearestStationText" style="font-weight: bold; color: #856404; font-size: 14px;">أنت قريب من محطة توقف</div>
+            <button id="alertDriverBtn" class="btn-alert-driver" onclick="togglePassengerAlert()">🚨 تنبيه السائق بوجود راكب في المحطة</button>
+        </div>
+
+        <!-- جدول المحطات وحركة الحافلة -->
+        <div style="font-weight: bold; font-size: 14px; margin-bottom: -10px;">📋 محطات المسار والجدول الزمني:</div>
+        <div id="stopsScheduleContainer" class="stops-schedule" style="display: none;"></div>
+    </div>
+</div>
+
+<script src="/js/passenger-core.js"></script>
+</body>
+</html>

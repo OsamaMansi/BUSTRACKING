@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تطبيق السائق - الملاحة والتشغيل</title>
+    <!-- مكتبة الخرائط Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <!-- ملف التصميم المنفصل -->
+    <link rel="stylesheet" href="/css/driver-style.css" />
+</head>
+<body>
+
+<div class="mobile-container">
+    <div class="header">
+        <h1>🚌 نظام السائق الذكي</h1>
+    </div>
+
+    <div class="content">
+        <!-- اختيار السائق -->
+        <div class="driver-select-box">
+            <label style="display:block; margin-bottom:5px; font-weight:bold; font-size:14px;">اختر حساب السائق:</label>
+            <select id="driverSelector" onchange="loadDriverTrip()">
+                <option value="" disabled selected>-- جاري التحميل --</option>
+            </select>
+        </div>
+
+        <div id="alertBox" class="alert-box"></div>
+
+        <!-- خريطة السائق الحية -->
+        <div id="driverMap"></div>
+
+        <div id="noTripMessage" class="no-trip">
+            ☕ لا توجد رحلات مجدولة لك حالياً.
+        </div>
+
+        <!-- تفاصيل الرحلة -->
+        <div id="tripCard" class="trip-card">
+            <h2>الرحلة الحالية</h2>
+            <div class="info-row"><span class="info-label">المسار:</span> <span id="lblRouteName">-</span></div>
+            <div class="info-row"><span class="info-label">الحافلة:</span> <span id="lblBusPlate">-</span></div>
+            <div class="info-row"><span class="info-label">الحالة:</span> <span id="lblStatus">-</span></div>
+            
+            <input type="hidden" id="currentTripId">
+            <input type="hidden" id="currentRouteId">
+
+            <!-- صندوق العد التنازلي للتوقف -->
+            <div id="dwellTimerBox" class="timer-box">
+                <div style="font-size: 13px; color: #856404; font-weight: bold;">⏳ وقت الانتظار المتبقي بالمحطة:</div>
+                <div id="timerDisplay" class="timer-display">02:00</div>
+                <button onclick="skipDwellTime()" style="background:#856404; color:white; border:none; padding:5px 10px; border-radius:4px; margin-top:5px; cursor:pointer;">تخطي والتحرك ➔</button>
+            </div>
+            
+            <button id="btnStart" class="btn btn-start" onclick="changeTripStatus('active')" style="display: none;">▶️ بدء الرحلة</button>
+            <button id="btnComplete" class="btn btn-complete" onclick="changeTripStatus('completed')" style="display: none;">✔️ إنهاء الرحلة</button>
+            <button id="btnArrivedStop" class="btn" style="background: #17a2b8; display: none;" onclick="startStationDwell(120)">🚏 وصلت محطة وقوف (بدء العداد)</button>
+        </div>
+    </div>
+</div>
+
+<script src="/js/driver-core.js"></script>
+</body>
+</html>

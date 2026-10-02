@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>لوحة تحكم الإدارة الاحترافية</title>
+    <!-- الخرائط ومحرك التوجيه (Routing) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
+    <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
+    
+    <!-- الاتصال اللحظي -->
+    <script src="/socket.io/socket.io.js"></script>
+
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; display: flex; background-color: #f4f6f9; }
+        .sidebar { width: 250px; background: #343a40; color: white; height: 100vh; padding: 20px; box-sizing: border-box; }
+        .sidebar h2 { margin-top: 0; font-size: 20px; text-align: center; border-bottom: 1px solid #4f5962; padding-bottom: 10px; }
+        .sidebar ul { list-style: none; padding: 0; }
+        .sidebar ul li { padding: 15px; cursor: pointer; border-bottom: 1px solid #4f5962; transition: 0.3s; font-weight: bold; }
+        .sidebar ul li:hover, .sidebar ul li.active { background: #007bff; }
+        .content { flex: 1; padding: 30px; overflow-y: auto; height: 100vh; box-sizing: border-box; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px;}
+        
+        input, select, textarea { padding: 10px; margin: 5px 0 15px; width: 100%; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; font-family: Arial; }
+        button { padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; }
+        .btn-add { background: #28a745; padding: 10px 20px; width: 100%; }
+        .btn-add:hover { background: #218838; }
+        .btn-edit { background: #ffc107; color: black; }
+        .btn-stop { background: #dc3545; }
+        .btn-start { background: #17a2b8; }
+        .btn-delete { background: #343a40; }
+        .btn-alert { background: #fd7e14; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; text-align: center; }
+        table, th, td { border: 1px solid #ddd; }
+        th { background-color: #f8f9fa; padding: 12px; }
+        td { padding: 10px; }
+        
+        .status-active { color: green; font-weight: bold; }
+        .status-inactive { color: red; font-weight: bold; }
+        .status-pending { color: #fd7e14; font-weight: bold; }
+
+        .section-content { display: none; }
+        #trips-section { display: block; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>لوحة الإدارة ⚙️</h2>
+        <ul>
+            <li class="active" onclick="showSection('trips')">📅 إدارة الرحلات</li>
+            <li onclick="showSection('users')">👥 إدارة المستخدمين</li>
+            <li onclick="showSection('buses')">🚌 إدارة الحافلات</li>
+            <li onclick="showSection('routes')">🗺️ المسارات والمحطات</li>
+        </ul>
+    </div>
+    
+    <div class="content">
+    	    <!-- قسم الرحلات -->
+	    <!-- قسم الرحلات -->
+<!-- قسم الرحلات -->
+        <div id="trips-section" class="section-content">
+            <div class="card">
+                <h3 id="tripFormTitle">جدولة رحلة جديدة (Dispatch)</h3>
+                <form id="tripForm">
+                    <input type="hidden" id="tripId">
+                    <select id="tripDriver" required></select>
+                    <select id="tripBus" required></select>
+                    <select id="tripRoute" required></select>
+                    <label>وقت الانطلاق المجدول:</label>
+                    <input type="datetime-local" id="tripTime" required>
+                    <button type="submit" class="btn-add" id="tripSubmitBtn">➕ تعيين الرحلة</button>
+                    <button type="button" class="btn-delete" style="display:none; width:100%; margin-top:10px;" id="tripCancelBtn" onclick="resetTripForm()">❌ إلغاء التعديل</button>
+                </form>
+            </div>
+            
+            <!-- بطاقة التحكم الإضافية (نسخ الرحلات الشهرية) -->
+            <div class="card" style="display: flex; justify-content: space-between; align-items: center; background: #e9ecef;">
+                <h3 style="margin: 0; font-size: 16px;">📋 أدوات الجدول الشهري</h3>
+                <button type="button" class="btn-edit" onclick="copyNextMonthTrips()">🔄 نسخ جميع رحلات الشهر الحالي للشهر القادم</button>
+            </div>
+
+            <div class="card">
+                <h3>جدول الرحلات</h3>
+                <table>
+                    <thead><tr><th>السائق</th><th>الحافلة</th><th>المسار</th><th>وقت الانطلاق</th><th>الحالة</th><th>إجراءات</th></tr></thead>
+                    <tbody id="tripsTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- قسم المستخدمين -->
+        <div id="users-section" class="section-content">
+            <div class="card">
+                <h3 id="userFormTitle">إضافة مستخدم جديد</h3>
+                <form id="userForm">
+                    <input type="hidden" id="userId">
+                    <input type="text" id="fullName" placeholder="الاسم الكامل" required>
+                    <input type="email" id="email" placeholder="البريد الإلكتروني (اختياري)">
+                    <input type="text" id="phone" placeholder="رقم الهاتف" required>
+                    <input type="password" id="password" placeholder="كلمة المرور">
+                    <select id="role" required>
+                        <option value="" disabled selected>-- اختر الصلاحية --</option>
+                        <option value="driver">سائق</option>
+                        <option value="passenger">راكب</option>
+                        <option value="admin">مدير نظام</option>
+                    </select>
+                    <button type="submit" class="btn-add" id="userSubmitBtn">➕ حفظ</button>
+                    <button type="button" class="btn-delete" style="display:none; width:100%; margin-top:10px;" id="userCancelBtn" onclick="resetUserForm()">❌ إلغاء</button>
+                </form>
+            </div>
+            <div class="card">
+                <h3>قائمة المستخدمين</h3>
+                <table>
+                    <thead><tr><th>الاسم</th><th>الهاتف</th><th>الإيميل</th><th>الصلاحية</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+                    <tbody id="usersTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- قسم الحافلات -->
+        <div id="buses-section" class="section-content">
+            <div class="card">
+                <h3 id="busFormTitle">إضافة حافلة جديدة</h3>
+                <form id="busForm">
+                    <input type="hidden" id="busId">
+                    <input type="text" id="plateNumber" placeholder="رقم اللوحة" required>
+                    <input type="number" id="capacity" placeholder="السعة" required min="1">
+                    <button type="submit" class="btn-add" id="busSubmitBtn">➕ حفظ</button>
+                    <button type="button" class="btn-delete" style="display:none; width:100%; margin-top:10px;" id="busCancelBtn" onclick="resetBusForm()">❌ إلغاء</button>
+                </form>
+            </div>
+            <div class="card">
+                <h3>أسطول الحافلات</h3>
+                <table>
+                    <thead><tr><th>رقم اللوحة</th><th>السعة</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+                    <tbody id="busesTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- قسم المسارات -->
+        <div id="routes-section" class="section-content">
+            <div class="card">
+                <h3 id="routeFormTitle">إضافة خط سير</h3>
+                <form id="routeForm">
+                    <input type="hidden" id="routeId">
+                    <input type="text" id="routeName" placeholder="اسم المسار" required>
+                    <textarea id="routeDesc" placeholder="الوصف" rows="2"></textarea>
+                    <button type="submit" class="btn-add" id="routeSubmitBtn">➕ حفظ</button>
+                    <button type="button" class="btn-delete" style="display:none; width:100%; margin-top:10px;" id="routeCancelBtn" onclick="resetRouteForm()">❌ إلغاء</button>
+                </form>
+            </div>
+            <div class="card">
+                <h3>المسارات</h3>
+                <table>
+                    <thead><tr><th>الاسم</th><th>الوصف</th><th>الإجراءات</th></tr></thead>
+                    <tbody id="routesTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- نافذة الخريطة -->
+<!-- نافذة الخريطة -->
+    <div id="mapModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:9999; justify-content:center; align-items:center;">
+        <div style="background:white; width:95%; height:95%; border-radius:8px; padding:20px; display:flex; flex-direction:column;">
+            <h3 id="modalRouteTitle" style="margin-top:0; border-bottom: 2px solid #007bff; padding-bottom: 10px;">إدارة المسار</h3>
+            
+            <!-- تم تحديث الشريط ليكون مرناً (Wrap) وتوسيع حقل الاسم ليتسع لـ 30+ حرف -->
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 15px; display: flex; flex-wrap: wrap; gap: 15px; align-items: center; border: 1px solid #ddd;">
+                <input type="text" id="stopNameInput" placeholder="اسم المحطة (مثال: نقطة الكلية، إشارة الردايدة...)" style="flex: 4; min-width: 280px; font-size: 16px; padding: 10px;">
+                
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <label>🔢 الترتيب:</label>
+                    <input type="number" id="stopOrderInput" style="width: 75px; font-size: 16px; padding: 8px;" min="1" value="1">
+
+                    <label>⏳ المكوث:</label>
+                    <input type="number" id="dwellTimeInput" style="width: 75px; font-size: 16px; padding: 8px;" min="1" value="2">
+                </div>
+                
+                <button type="button" class="btn-add" onclick="saveStop()" style="width: auto; padding: 10px 20px;">➕ إضافة بالنقر</button>
+                
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <label>🌐 السماحية:</label>
+                    <input type="number" id="routeDeviationInput" style="width: 85px; font-size: 16px; padding: 8px;" min="50" value="100">
+                </div>
+                
+                <button type="button" class="btn-edit" onclick="updateRouteDeviation()" style="width: auto; padding: 10px 20px;">💾 حفظ الإعدادات</button>
+                <button type="button" class="btn-stop" onclick="closeMapModal()" style="width: auto; margin-right: auto; padding: 10px 20px;">❌ إغلاق</button>
+            </div>
+            
+            <div id="mapContainer" style="flex:1; width:100%; border: 2px solid #ccc; border-radius: 4px;"></div>
+        </div>
+    </div>
+
+    <!-- استدعاء ملفات البرمجة المنفصلة -->
+    <script src="/js/admin-core.js"></script>
+    <script src="/js/admin-map.js"></script>
+</body>
+</html>
