@@ -3,22 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>تطبيق الراكب - تتبع الحافلات</title>
+    <title>تطبيق الراكب - قائمة الرحلات والتتبع</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f7f6; margin: 0; padding: 0; }
-        .container { max-width: 600px; margin: 20px auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .container { max-width: 650px; margin: 20px auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
         .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #007bff; padding-bottom: 10px; margin-bottom: 15px; }
         .header h2 { margin: 0; color: #333; font-size: 20px; }
         .btn-logout { background: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; }
-        .route-card { background: #f8f9fa; border: 1px solid #ddd; padding: 15px; border-radius: 8px; margin-bottom: 10px; cursor: pointer; transition: 0.2s; }
-        .route-card:hover { background: #e2e6ea; border-color: #007bff; }
-        .route-title { font-weight: bold; color: #007bff; font-size: 16px; margin-bottom: 5px; }
-        .info-text { font-size: 14px; color: #555; margin: 3px 0; }
-        #passengerMap { width: 100%; height: 350px; border-radius: 8px; margin-top: 15px; display: none; }
-        .alert-box { background: #ff9800; color: white; padding: 10px; border-radius: 5px; margin-bottom: 15px; display: none; text-align: center; font-weight: bold; }
+        
+        /* تصميم بطاقات الرحلات للقائمة الرئيسية */
+        .trip-card { background: #fff; border: 1px solid #ddd; border-right: 5px solid #007bff; padding: 15px; border-radius: 6px; margin-bottom: 12px; cursor: pointer; transition: 0.2s; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .trip-card:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.1); border-color: #007bff; }
+        .trip-title { font-weight: bold; color: #007bff; font-size: 17px; margin-bottom: 6px; }
+        .info-text { font-size: 14px; color: #555; margin: 4px 0; }
+        
+        #passengerMap { width: 100%; height: 380px; border-radius: 8px; margin-top: 15px; display: none; }
+        #stopsScheduleContainer { margin-top: 15px; display: none; max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 5px; padding: 10px; background: #fafafa; }
+        .stop-item { padding: 8px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; font-size: 14px; }
+        .stop-item:last-child { border-bottom: none; }
+        
+        .station-alert { background: #ff9800; color: white; padding: 10px; border-radius: 5px; margin-bottom: 15px; display: none; text-align: center; font-weight: bold; }
+        .info-card { background: #e9ecef; padding: 10px; border-radius: 5px; font-weight: bold; margin-bottom: 10px; text-align: center; color: #333; display: none; }
+        .btn-action { padding: 10px 15px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; color: white; width: 100%; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -32,18 +41,31 @@
         </div>
     </div>
 
-    <div id="passengerAlertBox" class="alert-box"></div>
+    <!-- تنبيه الاقتراب من محطة -->
+    <div id="stationAlertBox" class="station-alert">
+        <span id="nearestStationText">📍 أنت قريب من محطة</span>
+    </div>
 
-    <div id="routesSection">
-        <h3 style="font-size: 16px; color: #333;">المسارات والحافلات المتاحة لجدولك:</h3>
-        <div id="availableRoutesList">
-            <p style="text-align: center; color: #777;">جاري تحميل المسارات...</p>
+    <!-- قائمة الرحلات المتاحة (تظهر افتراضياً عند فتح الشاشة) -->
+    <div id="tripsListSection">
+        <h3 style="font-size: 16px; color: #333; margin-bottom: 15px;">📋 اختر الرحلة لمراقبة الحافلة ومحطاتها:</h3>
+        <div id="availableTripsContainer">
+            <p style="text-align: center; color: #777;">جاري تحميل الرحلات المتاحة...</p>
         </div>
     </div>
 
-    <!-- خريطة التتبع اللحظي للراكب -->
-    <div id="passengerMap"></div>
-    <button id="btnBackToList" onclick="backToRoutesList()" style="display:none; width:100%; margin-top:10px; background:#6c757d; color:white; border:none; padding:10px; border-radius:5px; cursor:pointer; font-weight:bold;">⬅️ العودة لقائمة المسارات</button>
+    <!-- شاشة التتبّع والخريطة (تفتح عند اختيار رحلة) -->
+    <div id="trackingSection" style="display: none;">
+        <div id="infoCard" class="info-card">🟢 النظام نشط - يتم تتبع موقع الحافلة الآن</div>
+        <div id="passengerMap"></div>
+        
+        <div id="stopsScheduleContainer">
+            <!-- جدول محطات الرحلة -->
+        </div>
+
+        <button id="alertDriverBtn" class="btn-action" style="background: #fd7e14;" onclick="togglePassengerAlert()">🚨 تنبيه السائق بوجود راكب في المحطة</button>
+        <button onclick="backToTripsList()" class="btn-action" style="background: #6c757d;">⬅️ العودة لقائمة الرحلات</button>
+    </div>
 </div>
 
 <script src="/js/passenger-core.js"></script>

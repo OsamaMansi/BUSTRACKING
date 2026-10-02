@@ -7,66 +7,87 @@ let selectedRouteId = null;
 let isAlertActive = false;
 
 // ==========================================
-// التحميل الأولي: جلب المسارات النشطة (مع دعم التصنيف الذكي)
+// التحميل الأولي: جلب قائمة الرحلات وعرضها كبطاقات
 // ==========================================
 window.addEventListener('DOMContentLoaded', async () => {
-    try {
-        // محاولة جلب المسارات والحافلات النشطة والمصنفة
-        const res = await fetch('/api/passenger/routes?audience=all');
-        const routes = await res.json();
-        
-        const selector = document.getElementById('routeSelector');
-        if (selector) {
-            selector.innerHTML = '<option value="" disabled selected>-- اختر المسار والرحلة المتاحة --</option>' + 
-                routes.map(r => {
-                    const rId = r.route_id || r.id;
-                    const rName = r.route_name || r.name;
-                    const busPlateStr = r.bus_plate ? ` (باص: ${r.bus_plate})` : '';
-                    return `<option value="${rId}">${rName}${busPlateStr}</option>`;
-                }).join('');
-        }
-    } catch (err) {
-        console.error("تعذر جلب المسارات المصنفة، جاري محاولة الجلب البديل...", err);
-        // آلية احتياطية (Fallback) لجلب المسارات العادية لضمان عدم توقف الواجهة
-        try {
-            const resFallback = await fetch('/api/routes');
-            const routesFallback = await resFallback.json();
-            const selector = document.getElementById('routeSelector');
-            if (selector) {
-                selector.innerHTML = '<option value="" disabled selected>-- اختر المسار --</option>' + 
-                    routesFallback.map(r => `<option value="${r.id}">${r.route_name}</option>`).join('');
-            }
-        } catch (e) {
-            console.error("خطأ نهائي في جلب المسارات", e);
-        }
+    const userStr = localStorage.getItem('currentUser');
+    if (!userStr) { window.location.href = '/login.html'; return; }
+    
+    const currentUser = JSON.parse(userStr);
+    if (currentUser.role !== 'passenger' && currentUser.role !== 'admin') {
+        alert("عذراً، هذه الشاشة مخصصة للركاب.");
+        window.location.href = '/login.html'; return;
     }
+
+    const nameDisplay = document.getElementById('passengerNameDisplay');
+    if (nameDisplay) nameDisplay.innerText = currentUser.full_name;
+
+    await loadAvailableTripsCards();
 });
 
-// ==========================================
-// بدء تتبع المسار المختار
-// ==========================================
-function trackSelectedRoute() {
-    const routeSelector = document.getElementById('routeSelector');
-    if (!routeSelector) return;
-    
-    selectedRouteId = routeSelector.value;
-    if (!selectedRouteId) return;
+// دالة جلب وعرض رحلات الحافلات كبطاقات في واجهة الراكب
+async function loadAvailableTripsCards() {
+    try {
+        const res = await fetch('/api/passenger/routes?audience=all');
+        const trips = await res.json();
+        
+        const container = document.getElementById('availableTripsContainer');
+        if (!container) return;
 
-    const mapEl = document.getElementById('passengerMap');
-    const scheduleEl = document.getElementById('stopsScheduleContainer');
-    const infoCardEl = document.getElementById('infoCard');
+        if (trips.length === 0) {
+            container.innerHTML = `<p style="text-align: center; color: #777; padding: 20px;">لا توجد رحلات أو حافلات متاحة حالياً.</p>`;
+            return;
+        }
 
-    if (mapEl) mapEl.style.display = 'block';
-    if (scheduleEl) scheduleEl.style.display = 'block';
-    if (infoCardEl) infoCardEl.innerText = '🔍 جاري تحديد موقعك ومحطات الخط...';
+        let html = '';
+        trips.forEach(t => {
+            const timeStr = t.scheduled_time ? new Date(t.scheduled_time).toLocaleString('ar-JO', { dateStyle: 'short', timeStyle: 'short' }) : 'غير محدد';
+            let badge = t.target_audience === 'student' ? '🎓 للطلاب' : t.target_audience === 'employee' ? '💼 للموظفين' : '🌐 للجميع';
 
-    initPassengerMap();
-    loadRouteStopsForPassenger(selectedRouteId);
+            html += `
+                <div class="trip-card" onclick="selectTripAndTrack(${t.route_id}, '${t.route_name}', '${t.bus_plate}', '${t.driver_name}')">
+                    <div class="trip-title">${t.route_name} <span style="font-size: 12px; float: left; background: #e9ecef; padding: 2px 6px; border-radius: 4px; color: #333;">${badge}</span></div>
+                    <div class="info-text">🚌 الحافلة رقم اللوحة: <strong>${t.bus_plate}</strong> (السعة: ${t.capacity})</div>
+                    <div class="info-text">👨‍✈️ السائق: ${t.driver_name}</div>
+                    <div class="info-text">🕒 موعد الانطلاق: <span style="color: #d9534f; font-weight: bold;">${timeStr}</span></div>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+    } catch (err) {
+        console.error("خطأ في جلب رحلات الراكب:", err);
+    }
 }
 
-// ==========================================
-// تهيئة خريطة الراكب ومتابعة موقع GPS الخاص به
-// ==========================================
+// اختيار رحلة والانتقال لخريطة التتبع والمحطات
+function selectTripAndTrack(routeId, routeName, busPlate, driverName) {
+    selectedRouteId = routeId;
+
+    // تبديل العرض بين القائمة وشاشة التتبع
+    document.getElementById('tripsListSection').style.display = 'none';
+    document.getElementById('trackingSection').style.display = 'block';
+    document.getElementById('passengerMap').style.display = 'block';
+    document.getElementById('stopsScheduleContainer').style.display = 'block';
+    document.getElementById('infoCard').style.display = 'block';
+    document.getElementById('infoCard').innerText = `🔍 جاري تحميل محطات مسار (${routeName}) وتتبع الحافلة (${busPlate})...`;
+
+    initPassengerMap();
+    loadRouteStopsForPassenger(routeId);
+}
+
+// العودة لقائمة الرحلات
+function backToTripsList() {
+    selectedRouteId = null;
+    document.getElementById('trackingSection').style.display = 'none';
+    document.getElementById('tripsListSection').style.display = 'block';
+    
+    if (busMarker && passengerMap) {
+        passengerMap.removeLayer(busMarker);
+        busMarker = null;
+    }
+    loadAvailableTripsCards();
+}
+
 function initPassengerMap() {
     if (!passengerMap) {
         passengerMap = L.map('passengerMap').setView([31.95, 35.91], 13);
@@ -93,9 +114,6 @@ function initPassengerMap() {
     }
 }
 
-// ==========================================
-// جلب محطات المسار وعرضها للراكب
-// ==========================================
 async function loadRouteStopsForPassenger(routeId) {
     try {
         const res = await fetch(`/api/stops/${routeId}`);
@@ -104,7 +122,7 @@ async function loadRouteStopsForPassenger(routeId) {
         const scheduleContainer = document.getElementById('stopsScheduleContainer');
         if (!scheduleContainer) return;
         
-        scheduleContainer.innerHTML = '';
+        scheduleContainer.innerHTML = '<h4 style="margin: 0 0 10px 0; font-size: 14px; color: #333;">🚏 محطات خط السير:</h4>';
 
         currentRouteStops.forEach((stop) => {
             L.marker([stop.latitude, stop.longitude], {
@@ -122,16 +140,13 @@ async function loadRouteStopsForPassenger(routeId) {
         const infoCardEl = document.getElementById('infoCard');
         if (currentRouteStops.length > 0) {
             passengerMap.setView([currentRouteStops[0].latitude, currentRouteStops[0].longitude], 14);
-            if (infoCardEl) infoCardEl.innerText = '🟢 النظام نشط - يتم تتبع موقع الحافلة الآن';
+            if (infoCardEl) infoCardEl.innerText = '🟢 النظام نشط - يتم تتبع موقع الحافلة لحظياً الآن';
         }
     } catch (err) {
         console.error("خطأ في جلب المحطات", err);
     }
 }
 
-// ==========================================
-// فحص اقتراب الراكب من المحطات (ضمن نطاق 100 متر)
-// ==========================================
 function checkProximityToStops(passengerLat, passengerLng) {
     let nearStationBox = document.getElementById('stationAlertBox');
     let nearestStationText = document.getElementById('nearestStationText');
@@ -156,9 +171,6 @@ function checkProximityToStops(passengerLat, passengerLng) {
     }
 }
 
-// ==========================================
-// دوال حساب المسافات الجغرافية
-// ==========================================
 function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
     var R = 6371000;
     var dLat = deg2rad(lat2 - lat1);
@@ -173,9 +185,6 @@ function deg2rad(deg) {
     return deg * (Math.PI / 180);
 }
 
-// ==========================================
-// نظام تنبيه السائق من الراكب
-// ==========================================
 function togglePassengerAlert() {
     const btn = document.getElementById('alertDriverBtn');
     isAlertActive = !isAlertActive;
@@ -184,38 +193,35 @@ function togglePassengerAlert() {
         if (btn) {
             btn.classList.add('active');
             btn.innerText = '⚠️ تم إرسال التنبيه للسائق (اضغط للإلغاء)';
+            btn.style.background = '#dc3545';
         }
         socket.emit('passengerAlert', { routeId: selectedRouteId, message: 'تنبيه: يوجد راكب ينتظر في المحطة!' });
     } else {
         if (btn) {
             btn.classList.remove('active');
             btn.innerText = '🚨 تنبيه السائق بوجود راكب في المحطة';
+            btn.style.background = '#fd7e14';
         }
         socket.emit('passengerCancelAlert', { routeId: selectedRouteId });
     }
 }
 
-// ==========================================
-// استقبال موقع الحافلة اللحظي عبر الـ WebSockets ورسمه
-// ==========================================
+function logout() {
+    localStorage.removeItem('currentUser');
+    window.location.href = '/login.html';
+}
+
+// استقبال موقع الحافلة اللحظي ورسمه على خريطة الراكب
 socket.on('busLocationUpdate', (data) => {
-    if (data.routeId == selectedRouteId) {
+    if (selectedRouteId && data.routeId == selectedRouteId) {
         if (!passengerMap) return;
         
         if (!busMarker) {
             busMarker = L.marker([data.lat, data.lng], {
                 icon: L.divIcon({ className: 'bus-moving-icon', html: '🚍', iconSize: [32, 32] })
-            }).addTo(passengerMap).bindPopup('الحافلة في طريقها إليك');
+            }).addTo(passengerMap).bindPopup('الحافلة تتحرك نحو محطتك');
         } else {
             busMarker.setLatLng([data.lat, data.lng]);
         }
     }
 });
-
-// ==========================================
-// دالة تسجيل الخروج للراكب
-// ==========================================
-function logout() {
-    localStorage.removeItem('currentUser');
-    window.location.href = '/login.html';
-}

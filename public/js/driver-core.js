@@ -3,9 +3,9 @@ let currentDriverId = null;
 let driverMap = null;
 let driverMarker = null;
 let watchId = null;
-let allDriverTrips = []; // [تعديل] مصفوفة عامة لتخزين جميع رحلات السائق وتمكين فلترتها
+let allDriverTrips = [];
+let countdownInterval = null; // متغير للعداد التناقصي
 
-// التعرف التلقائي على السائق عند تحميل الصفحة
 window.addEventListener('DOMContentLoaded', async () => {
     const userStr = localStorage.getItem('currentUser');
     if (!userStr) { window.location.href = '/login.html'; return; }
@@ -26,15 +26,12 @@ function logout() {
     window.location.href = '/login.html';
 }
 
-// ==========================================
-// [محدث] جلب رحلات السائق وتخزينها محلياً
-// ==========================================
 async function loadDriverTrip() {
     if (!currentDriverId) return;
 
     try {
         const res = await fetch(`/api/trips/driver/${currentDriverId}/today`);
-        allDriverTrips = await res.json(); // [تعديل] تخزين الرحلات في المتغير العام
+        allDriverTrips = await res.json();
 
         const tripCard = document.getElementById('tripCard');
         const noTripMsg = document.getElementById('noTripMessage');
@@ -44,7 +41,6 @@ async function loadDriverTrip() {
         if (allDriverTrips.length > 0) {
             scheduleBox.style.display = 'block';
             
-            // 1. استخراج الرحلة الحالية (الجارية أو أول رحلة مجدولة)
             const currentTrip = allDriverTrips.find(t => t.status === 'active') || allDriverTrips.find(t => t.status === 'pending');
 
             if (currentTrip) {
@@ -58,10 +54,9 @@ async function loadDriverTrip() {
                 document.getElementById('lblRouteName').innerText = currentTrip.route_name;
                 document.getElementById('lblBusPlate').innerText = currentTrip.bus_plate;
 
-                // تنسيق وعرض الوقت المجدول
+                // تفعيل العداد التناقصي للوقت المجدول
                 if (currentTrip.scheduled_time) {
-                    const timeObj = new Date(currentTrip.scheduled_time);
-                    document.getElementById('lblScheduledTime').innerText = timeObj.toLocaleTimeString('ar-JO', { hour: '2-digit', minute: '2-digit' });
+                    startCountdownTimer(currentTrip.scheduled_time);
                 } else {
                     document.getElementById('lblScheduledTime').innerText = "غير محدد";
                 }
@@ -74,21 +69,21 @@ async function loadDriverTrip() {
 
                 if (currentTrip.status === 'pending') {
                     document.getElementById('lblStatus').innerText = 'مجدولة ⏳';
-                    btnStart.style.display = 'block';
-                    btnCancel.style.display = 'block';
-                    btnComplete.style.display = 'none';
+                    if(btnStart) btnStart.style.display = 'block';
+                    if(btnCancel) btnCancel.style.display = 'block';
+                    if(btnComplete) btnComplete.style.display = 'none';
                 } else if (currentTrip.status === 'active') {
                     document.getElementById('lblStatus').innerText = 'جارية 🟢';
-                    btnStart.style.display = 'none';
-                    btnCancel.style.display = 'block';
-                    btnComplete.style.display = 'block';
+                    if(btnStart) btnStart.style.display = 'none';
+                    if(btnCancel) btnCancel.style.display = 'block';
+                    if(btnComplete) btnComplete.style.display = 'block';
                 }
             } else {
                 tripCard.style.display = 'none'; mapDiv.style.display = 'none'; noTripMsg.style.display = 'block';
                 if (watchId) navigator.geolocation.clearWatch(watchId);
+                if (countdownInterval) clearInterval(countdownInterval);
             }
 
-            // 2. [تعديل] استدعاء دالة التصفية لعرض الجدول بناءً على خيار السائق
             filterDriverTrips();
 
         } else {
@@ -97,9 +92,31 @@ async function loadDriverTrip() {
     } catch (err) { console.error(err); }
 }
 
-// ==========================================
-// [جديد] دالة تصفية وعرض الرحلات حسب اختيار السائق من القائمة المنسدلة
-// ==========================================
+// دالة العداد التناقصي للوقت المجدول
+function startCountdownTimer(targetTimeStr) {
+    if (countdownInterval) clearInterval(countdownInterval);
+    const targetTime = new Date(targetTimeStr).getTime();
+
+    countdownInterval = setInterval(() => {
+        const now = new Date().getTime();
+        const distance = targetTime - now;
+        const timeElement = document.getElementById('lblScheduledTime');
+        if (!timeElement) return;
+
+        if (distance < 0) {
+            timeElement.innerHTML = "🔴 حان وقت الانطلاق (أو فائت)";
+            clearInterval(countdownInterval);
+            return;
+        }
+
+        const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+        timeElement.innerHTML = `${new Date(targetTimeStr).toLocaleTimeString('ar-JO', { hour: '2-digit', minute: '2-digit' })} <span style="font-size:12px; color:#d9534f;">(باقي: ${hours}س ${minutes}د ${seconds}ث)</span>`;
+    }, 1000);
+}
+
 function filterDriverTrips() {
     const filterSelect = document.getElementById('tripFilterSelect');
     const filterValue = filterSelect ? filterSelect.value : 'pending';
@@ -107,14 +124,12 @@ function filterDriverTrips() {
     if (!scheduleList) return;
 
     let filtered = allDriverTrips;
-
-    // تطبيق معايير التصفية
     if (filterValue === 'pending') {
         filtered = allDriverTrips.filter(t => t.status === 'pending' || t.status === 'active');
     } else if (filterValue === 'completed') {
         filtered = allDriverTrips.filter(t => t.status === 'completed');
     } else if (filterValue === 'all') {
-        filtered = allDriverTrips; // عرض جميع الرحلات
+        filtered = allDriverTrips;
     }
 
     if (filtered.length === 0) {
@@ -124,12 +139,7 @@ function filterDriverTrips() {
 
     let scheduleHtml = '';
     filtered.forEach(t => {
-        let statusIcon = '';
-        if(t.status === 'completed') statusIcon = '✔️ منتهية';
-        else if(t.status === 'cancelled') statusIcon = '❌ ملغاة';
-        else if(t.status === 'active') statusIcon = '🟢 جارية';
-        else statusIcon = '⏳ مجدولة';
-
+        let statusIcon = t.status === 'completed' ? '✔️ منتهية' : t.status === 'cancelled' ? '❌ ملغاة' : t.status === 'active' ? '🟢 جارية' : '⏳ مجدولة';
         const timeStr = t.scheduled_time ? new Date(t.scheduled_time).toLocaleString('ar-JO', { dateStyle: 'short', timeStyle: 'short' }) : 'غير محدد';
         
         scheduleHtml += `
@@ -142,16 +152,12 @@ function filterDriverTrips() {
     scheduleList.innerHTML = scheduleHtml;
 }
 
-// ==========================================
-// تغيير حالة الرحلة + حماية الوقت (4 ساعات) والملاحظات
-// ==========================================
 async function changeTripStatus(newStatus) {
     const tripId = document.getElementById('currentTripId').value;
     const scheduledTimeStr = document.getElementById('currentScheduledTime').value;
     if (!tripId) return;
 
     let notes = null;
-
     if (newStatus === 'active' && scheduledTimeStr) {
         const scheduledTime = new Date(scheduledTimeStr);
         const now = new Date();
@@ -182,13 +188,11 @@ async function changeTripStatus(newStatus) {
 
     if (res.ok) {
         if(newStatus === 'completed' && watchId) navigator.geolocation.clearWatch(watchId);
+        if(countdownInterval) clearInterval(countdownInterval);
         loadDriverTrip();
     }
 }
 
-// ==========================================
-// دالة الإلغاء وتتبع الـ GPS
-// ==========================================
 async function cancelTrip() {
     const tripId = document.getElementById('currentTripId').value;
     if (!tripId) return;
@@ -203,6 +207,7 @@ async function cancelTrip() {
     if (res.ok) {
         alert("تم إلغاء الرحلة بنجاح.");
         if (watchId) navigator.geolocation.clearWatch(watchId);
+        if (countdownInterval) clearInterval(countdownInterval);
         loadDriverTrip();
     }
 }
