@@ -8,9 +8,11 @@ require('dotenv').config();
 const db = require('./db');
 
 const app = express();
+// السماح بالوصول للملفات الثابتة في المجلد الرئيسي
 app.use(express.static(__dirname));
 const server = http.createServer(app);
 
+// إعداد خادم الـ WebSockets للسماح بالاتصال من أي مصدر (CORS)
 const io = new Server(server, {
     cors: { origin: "*", methods: ["GET", "POST"] }
 });
@@ -18,15 +20,17 @@ const io = new Server(server, {
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
+// السماح للسيرفر بفهم البيانات المرسلة بصيغة JSON
 app.use(express.json());
+// جعل مجلد public متاحاً للعامة (يحتوي على ملفات التصميم css والسكربت js)
 app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.static('public')); // يقرأ تلقائياً مجلد public ويوفر مجلدات css و js بداخله
 
 // ==========================================
 // --- استدعاء المسارات المنفصلة (Routes) ---
 // ==========================================
+// يتم توجيه أي طلب يبدأ بـ /api/users إلى ملف المستخدمين المنفصل
 const usersRouter = require('./routes/users');
-app.use('/api/users', usersRouter); // أي طلب يبدأ بـ /api/users سيتم توجيهه للملف المنفصل
+app.use('/api/users', usersRouter); 
 
 const busesRouter = require('./routes/buses');
 app.use('/api/buses', busesRouter);
@@ -41,29 +45,36 @@ const tripsRouter = require('./routes/trips');
 app.use('/api/trips', tripsRouter);
 
 // ==========================================
-// --- مسار تسجيل الدخول الموحد ---
+// --- [جديد] مسار تسجيل الدخول الموحد ---
 // ==========================================
+// هذا المسار يستقبل بيانات الدخول من شاشة login.html
 app.post('/api/login', async (req, res) => {
+    // استخراج اسم المستخدم (الذي قد يكون الاسم، الهاتف، أو الإيميل) وكلمة المرور
     const { username, password } = req.body;
+    
     try {
-        // التحقق من رقم الهاتف أو الإيميل، مع مطابقة كلمة المرور وحالة الحساب
+        // استعلام قاعدة البيانات:
+        // نبحث عن المستخدم الذي يتطابق إما مع الهاتف، أو الاسم، أو الإيميل
+        // ملاحظة: إذا كان الإيميل في القاعدة null، فلن يتم التطابق ولن يحدث خطأ
         const result = await db.query(
             `SELECT id, full_name, role, is_active 
              FROM users 
-             WHERE (phone = $1 OR email = $1) 
+             WHERE (phone = $1 OR full_name = $1 OR email = $1) 
              AND password_hash = $2 
              AND is_active = true`,
             [username, password]
         );
 
+        // إذا تم العثور على مستخدم يطابق الشروط
         if (result.rows.length > 0) {
-            res.json(result.rows[0]); // إرسال بيانات المستخدم والصلاحية
+            res.json(result.rows[0]); // إرسال بيانات المستخدم والصلاحية للواجهة
         } else {
+            // إذا لم يتطابق، نرسل خطأ 401 (غير مصرح)
             res.status(401).json({ error: 'بيانات الدخول غير صحيحة' });
         }
     } catch (err) {
         console.error('خطأ في مسار تسجيل الدخول:', err);
-        res.status(500).json({ error: 'خطأ في الخادم' });
+        res.status(500).json({ error: 'خطأ داخلي في الخادم' });
     }
 });
 
@@ -71,6 +82,7 @@ app.post('/api/login', async (req, res) => {
 // --- مسارات شاشات الواجهة الأمامية ---
 // ==========================================
 app.get('/', (req, res) => res.send('Bus Tracking Server is Running!'));
+// سيتم لاحقاً إضافة app.get('/login') لتوجيه المستخدمين بشكل افتراضي
 app.get('/driver', (req, res) => res.sendFile(path.join(__dirname, 'driver.html')));
 app.get('/passenger', (req, res) => res.sendFile(path.join(__dirname, 'passenger.html')));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'admin.html')));
@@ -78,21 +90,16 @@ app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'admin.html'))
 // ==========================================
 // --- قسم البث اللحظي للـ WebSockets ---
 // ==========================================
-// ==========================================
-// إعدادات الـ Socket.io (الاتصال اللحظي)
-// ==========================================
 io.on('connection', (socket) => {
     console.log('مستخدم جديد متصل:', socket.id);
 
-// استلام موقع الباص من السائق وإعادة توجيهه للركاب
+    // استلام موقع الباص من السائق وإعادة توجيهه للركاب
     socket.on('updateBusLocation', (data) => {
-        // data: { routeId, lat, lng, driverId }
         io.emit('busLocationUpdate', data);
     });
 
     // استلام تنبيه الراكب وإرساله للسائق
     socket.on('passengerAlert', (data) => {
-        // data: { routeId, message }
         io.emit('driverPassengerAlert', data);
     });
 
@@ -101,7 +108,7 @@ io.on('connection', (socket) => {
         io.emit('driverCancelPassengerAlert', data);
     });
 
-    // استلام تنبيه من الإدارة لإرساله لسائق محدد (الكود الجديد داخل القوس الصحيح)
+    // استلام تنبيه من الإدارة لإرساله لسائق محدد
     socket.on('adminSendAlert', (data) => {
         console.log(`⚠️ تنبيه من الإدارة للسائق ${data.driverId}: ${data.message}`);
         io.emit(`alertToDriver_${data.driverId}`, {
@@ -115,9 +122,8 @@ io.on('connection', (socket) => {
     });
 });
 
-
 // ==========================================
-// تشغيل السيرفر
+// --- تشغيل السيرفر ---
 // ==========================================
 server.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);

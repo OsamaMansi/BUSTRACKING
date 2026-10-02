@@ -36,6 +36,7 @@
             margin-bottom: 5px;
             color: #666;
             font-size: 14px;
+            font-weight: bold;
         }
         .input-group input {
             width: 100%;
@@ -74,18 +75,20 @@
     <h2>🚌 بوابة الدخول الموحدة</h2>
     <form id="loginForm">
         <div class="input-group">
-            <label>اسم المستخدم / رقم الهوية</label>
-            <input type="text" id="username" required>
+            <!-- تم تعديل الـ label وإضافة placeholder هنا -->
+            <label>الاسم، رقم الهاتف، أو الإيميل</label>
+            <input type="text" id="username" placeholder="أدخل بيانات الدخول..." required>
         </div>
         <div class="input-group">
             <label>كلمة المرور</label>
             <input type="password" id="password" required>
         </div>
         <button type="submit" class="btn-login">تسجيل الدخول</button>
-        <div id="errorMessage">اسم المستخدم أو كلمة المرور غير صحيحة.</div>
+        <div id="errorMessage">بيانات الدخول غير صحيحة.</div>
     </form>
 </div>
 
+<!-- استدعاء ملف الجافاسكربت المسؤول عن إرسال البيانات -->
 <script src="/js/login.js"></script>
 </body>
 </html>

@@ -1,14 +1,16 @@
+// الاستماع لحدث الضغط على زر "تسجيل الدخول"
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
+    e.preventDefault(); // منع المتصفح من إعادة تحميل الصفحة
     
-    // المستخدم سيدخل رقم هاتفه هنا (أو إيميله للإدارة)
-    const username = document.getElementById('username').value;
+    // جلب البيانات التي أدخلها المستخدم وإزالة أي مسافات زائدة
+    const username = document.getElementById('username').value.trim();
     const password = document.getElementById('password').value;
     const errorMsg = document.getElementById('errorMessage');
     
-    errorMsg.style.display = 'none';
+    errorMsg.style.display = 'none'; // إخفاء رسالة الخطأ عند كل محاولة جديدة
 
     try {
+        // إرسال البيانات إلى السيرفر (مسار /api/login الذي جهزناه سابقاً)
         const response = await fetch('/api/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -16,29 +18,33 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
         });
 
         if (response.ok) {
+            // إذا تم التحقق بنجاح، نستلم بيانات المستخدم من قاعدة البيانات
             const user = await response.json();
             
-            // حفظ بيانات المستخدم لاستخدامها في الشاشات (مثل إخفاء قائمة اختيار السائق)
+            // حفظ بيانات المستخدم في المتصفح لاستخدامها في الشاشات الأخرى لاحقاً
             localStorage.setItem('currentUser', JSON.stringify(user));
 
-            // التوجيه الذكي حسب عمود (role) من قاعدة البيانات
+            // التوجيه الذكي بناءً على الصلاحية (Role)
             if (user.role === 'admin') {
                 window.location.href = '/admin.html';
             } else if (user.role === 'driver') {
                 window.location.href = '/driver.html';
             } else if (user.role === 'passenger') {
                 window.location.href = '/passenger.html';
+            } else if (user.role === 'monitor') {
+                window.location.href = '/fleet.html'; // شاشة المراقبة الشاملة
             } else {
-                errorMsg.innerText = "صلاحية غير مدعومة حالياً.";
+                errorMsg.innerText = "لا تملك الصلاحية للدخول.";
                 errorMsg.style.display = 'block';
             }
         } else {
-            errorMsg.innerText = "رقم الهاتف أو كلمة المرور غير صحيحة.";
+            // في حال أعاد السيرفر حالة رفض (البيانات خاطئة)
+            errorMsg.innerText = "الاسم، رقم الهاتف، أو كلمة المرور غير صحيحة.";
             errorMsg.style.display = 'block';
         }
     } catch (error) {
         console.error('خطأ في الاتصال:', error);
-        errorMsg.innerText = "حدث خطأ في الاتصال بالخادم.";
+        errorMsg.innerText = "حدث خطأ في الاتصال بالسيرفر.";
         errorMsg.style.display = 'block';
     }
 });
