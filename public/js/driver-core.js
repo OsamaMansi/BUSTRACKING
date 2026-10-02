@@ -106,6 +106,9 @@ async function initDriverMap(routeId) {
                 driverMarker.setLatLng([lat, lng]);
             }
 
+            // [الإضافة الجديدة]: جعل الخريطة تتحرك وتتمركز حول السائق فور تغير موقعه
+            driverMap.panTo([lat, lng]);
+
             // إرسال الإحداثيات للركاب عبر الـ Socket.io
             const currentRouteId = document.getElementById('currentRouteId').value;
             if (currentRouteId) {
