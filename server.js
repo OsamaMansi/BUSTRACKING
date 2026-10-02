@@ -79,6 +79,47 @@ app.post('/api/login', async (req, res) => {
 });
 
 // ==========================================
+// --- [جديد] جلب جدول رحلات السائق لليوم ---
+// ==========================================
+app.get('/api/trips/driver/:id/today', async (req, res) => {
+    const driverId = req.params.id;
+    try {
+        // يجلب كل رحلات السائق لتاريخ اليوم، مرتبة حسب الوقت
+        const result = await db.query(
+            `SELECT t.id, t.route_id, r.name as route_name, b.plate_number as bus_plate, t.status, t.scheduled_time 
+             FROM trips t
+             JOIN routes r ON t.route_id = r.id
+             JOIN buses b ON t.bus_id = b.id
+             WHERE t.driver_id = $1 
+             AND DATE(t.scheduled_time) = CURRENT_DATE
+             ORDER BY t.scheduled_time ASC`,
+            [driverId]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: 'خطأ في جلب جدول اليوم' });
+    }
+});
+
+// ==========================================
+// --- [تعديل] مسار تحديث حالة الرحلة ليقبل الملاحظات ---
+// ==========================================
+app.patch('/api/trips/:id/status-with-notes', async (req, res) => {
+    const tripId = req.params.id;
+    const { status, start_notes } = req.body;
+    try {
+        if (start_notes) {
+            await db.query(`UPDATE trips SET status = $1, start_notes = $2 WHERE id = $3`, [status, start_notes, tripId]);
+        } else {
+            await db.query(`UPDATE trips SET status = $1 WHERE id = $3`, [status, tripId]);
+        }
+        res.json({ message: 'تم تحديث الحالة بنجاح' });
+    } catch (err) {
+        res.status(500).json({ error: 'خطأ في تحديث الرحلة' });
+    }
+});
+
+// ==========================================
 // --- مسارات شاشات الواجهة الأمامية ---
 // ==========================================
 app.get('/', (req, res) => res.send('Bus Tracking Server is Running!'));

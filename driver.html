@@ -9,61 +9,56 @@
     <script src="/socket.io/socket.io.js"></script>
     <link rel="stylesheet" href="/css/driver-style.css" />
     <style>
-        /* تصاميم الأقسام الجديدة */
-        .driver-welcome {
-            background: #e9ecef; padding: 15px; border-radius: 8px; margin-bottom: 15px;
-            display: flex; justify-content: space-between; align-items: center; border: 1px solid #ddd;
-        }
+        .driver-welcome { background: #e9ecef; padding: 15px; border-radius: 8px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #ddd; }
         .driver-welcome h3 { margin: 0; color: #333; font-size: 16px; }
         .btn-logout { background: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;}
         .btn-cancel { background: #dc3545; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; width: 100%; margin-top: 8px; font-weight: bold;}
+        .daily-schedule { background: #fff; padding: 15px; border-radius: 8px; border: 1px solid #ddd; margin-top: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .daily-schedule h3 { margin-top: 0; font-size: 16px; color: #333; border-bottom: 2px solid #007bff; padding-bottom: 8px; }
+        .schedule-list { list-style: none; padding: 0; margin: 0; }
+        .schedule-list li { padding: 10px 0; border-bottom: 1px solid #eee; font-size: 14px; }
+        .schedule-list li:last-child { border-bottom: none; }
     </style>
 </head>
 <body>
 
 <div class="mobile-container">
-    <div class="header">
-        <h1>🚌 نظام السائق الذكي</h1>
-    </div>
+    <div class="header"><h1>🚌 نظام السائق الذكي</h1></div>
 
     <div class="content">
-        <!-- [جديد] شاشة الترحيب وتسجيل الخروج بدلاً من اختيار السائق -->
         <div class="driver-welcome">
             <h3>أهلاً بك: <span id="driverNameDisplay" style="color: #007bff;"></span></h3>
             <button class="btn-logout" onclick="logout()">خروج</button>
         </div>
 
         <div id="alertBox" class="alert-box"></div>
-
-        <!-- خريطة السائق الحية -->
         <div id="driverMap"></div>
 
-        <div id="noTripMessage" class="no-trip">
-            ☕ لا توجد مهام إضافية في جدولك اليوم.
-        </div>
+        <div id="noTripMessage" class="no-trip">☕ لا توجد مهام إضافية في جدولك اليوم.</div>
 
-        <!-- تفاصيل الرحلة -->
         <div id="tripCard" class="trip-card">
             <h2>الرحلة الحالية</h2>
             <div class="info-row"><span class="info-label">المسار:</span> <span id="lblRouteName">-</span></div>
             <div class="info-row"><span class="info-label">الحافلة:</span> <span id="lblBusPlate">-</span></div>
+            <!-- [جديد] وقت الانطلاق المجدول -->
+            <div class="info-row"><span class="info-label">موعد الانطلاق:</span> <span id="lblScheduledTime" style="color: #d32f2f; font-weight: bold;">-</span></div>
             <div class="info-row"><span class="info-label">الحالة:</span> <span id="lblStatus">-</span></div>
             
             <input type="hidden" id="currentTripId">
             <input type="hidden" id="currentRouteId">
+            <input type="hidden" id="currentScheduledTime"> <!-- مخفي للبرمجة -->
 
-            <div id="dwellTimerBox" class="timer-box" style="display: none;">
-                <div style="font-size: 13px; color: #856404; font-weight: bold;">⏳ وقت الانتظار المتبقي بالمحطة:</div>
-                <div id="timerDisplay" class="timer-display">02:00</div>
-                <button onclick="skipDwellTime()" style="background:#856404; color:white; border:none; padding:5px 10px; border-radius:4px; margin-top:5px; cursor:pointer;">تخطي والتحرك ➔</button>
-            </div>
-            
             <button id="btnStart" class="btn btn-start" onclick="changeTripStatus('active')" style="display: none;">▶️ بدء الرحلة</button>
             <button id="btnComplete" class="btn btn-complete" onclick="changeTripStatus('completed')" style="display: none;">✔️ إنهاء الرحلة</button>
-            <button id="btnArrivedStop" class="btn" style="background: #17a2b8; display: none;" onclick="startStationDwell(120)">🚏 وصلت محطة وقوف</button>
-            
-            <!-- [جديد] زر إلغاء الرحلة -->
             <button id="btnCancel" class="btn-cancel" onclick="cancelTrip()" style="display: none;">❌ طارئ: إلغاء الرحلة</button>
+        </div>
+
+        <!-- [جديد] صندوق جدول اليوم يظهر أسفل الشاشة -->
+        <div class="daily-schedule" id="dailyScheduleBox" style="display: none;">
+            <h3>📋 جدول رحلاتك اليوم</h3>
+            <ul class="schedule-list" id="scheduleList">
+                <!-- سيتم تعبئتها برمجياً -->
+            </ul>
         </div>
     </div>
 </div>
