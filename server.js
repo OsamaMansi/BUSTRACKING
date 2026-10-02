@@ -41,6 +41,33 @@ const tripsRouter = require('./routes/trips');
 app.use('/api/trips', tripsRouter);
 
 // ==========================================
+// --- مسار تسجيل الدخول الموحد ---
+// ==========================================
+app.post('/api/login', async (req, res) => {
+    const { username, password } = req.body;
+    try {
+        // التحقق من رقم الهاتف أو الإيميل، مع مطابقة كلمة المرور وحالة الحساب
+        const result = await db.query(
+            `SELECT id, full_name, role, is_active 
+             FROM users 
+             WHERE (phone = $1 OR email = $1) 
+             AND password_hash = $2 
+             AND is_active = true`,
+            [username, password]
+        );
+
+        if (result.rows.length > 0) {
+            res.json(result.rows[0]); // إرسال بيانات المستخدم والصلاحية
+        } else {
+            res.status(401).json({ error: 'بيانات الدخول غير صحيحة' });
+        }
+    } catch (err) {
+        console.error('خطأ في مسار تسجيل الدخول:', err);
+        res.status(500).json({ error: 'خطأ في الخادم' });
+    }
+});
+
+// ==========================================
 // --- مسارات شاشات الواجهة الأمامية ---
 // ==========================================
 app.get('/', (req, res) => res.send('Bus Tracking Server is Running!'));

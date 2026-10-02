@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تسجيل الدخول - نظام إدارة الأسطول</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .login-container {
+            background: #fff;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+        .login-container h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+        .input-group {
+            margin-bottom: 15px;
+            text-align: right;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #666;
+            font-size: 14px;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+        .btn-login {
+            width: 100%;
+            padding: 12px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: 0.3s;
+        }
+        .btn-login:hover {
+            background-color: #0056b3;
+        }
+        #errorMessage {
+            color: #dc3545;
+            margin-top: 15px;
+            font-size: 14px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="login-container">
+    <h2>🚌 بوابة الدخول الموحدة</h2>
+    <form id="loginForm">
+        <div class="input-group">
+            <label>اسم المستخدم / رقم الهوية</label>
+            <input type="text" id="username" required>
+        </div>
+        <div class="input-group">
+            <label>كلمة المرور</label>
+            <input type="password" id="password" required>
+        </div>
+        <button type="submit" class="btn-login">تسجيل الدخول</button>
+        <div id="errorMessage">اسم المستخدم أو كلمة المرور غير صحيحة.</div>
+    </form>
+</div>
+
+<script src="/js/login.js"></script>
+</body>
+</html>
