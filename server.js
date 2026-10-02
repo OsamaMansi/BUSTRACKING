@@ -84,9 +84,8 @@ app.post('/api/login', async (req, res) => {
 app.get('/api/trips/driver/:id/today', async (req, res) => {
     const driverId = req.params.id;
     try {
-        // جلب كل الرحلات غير المنتهية والملغاة للسائق للتأكد من ظهورها
         const result = await db.query(
-            `SELECT t.id, t.route_id, r.name as route_name, b.plate_number as bus_plate, t.status, t.scheduled_time 
+            `SELECT t.id, t.route_id, r.route_name as route_name, b.plate_number as bus_plate, t.status, t.scheduled_time 
              FROM trips t
              JOIN routes r ON t.route_id = r.id
              JOIN buses b ON t.bus_id = b.id
@@ -97,7 +96,7 @@ app.get('/api/trips/driver/:id/today', async (req, res) => {
         );
         res.json(result.rows);
     } catch (err) {
-        console.error(err);
+        console.error('خطأ في استعلام السائق:', err);
         res.status(500).json({ error: 'خطأ في جلب جدول الرحلات' });
     }
 });
