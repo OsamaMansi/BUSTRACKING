@@ -54,13 +54,20 @@
         </div>
 
         <!-- [جديد] صندوق جدول اليوم يظهر أسفل الشاشة -->
-        <div class="daily-schedule" id="dailyScheduleBox" style="display: none;">
-            <h3>📋 جدول رحلاتك اليوم</h3>
-            <ul class="schedule-list" id="scheduleList">
-                <!-- سيتم تعبئتها برمجياً -->
-            </ul>
-        </div>
+<!-- صندوق جدول الرحلات مع قائمة التصفية -->
+<div class="daily-schedule" id="dailyScheduleBox" style="display: none;">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #007bff; padding-bottom: 8px; margin-bottom: 10px;">
+        <h3 style="margin: 0; font-size: 16px; border: none; padding: 0;">📋 جدول الرحلات</h3>
+        <!-- قائمة التصفية الجديدة -->
+        <select id="tripFilterSelect" onchange="filterDriverTrips()" style="width: auto; padding: 5px; font-size: 13px; margin: 0; border-radius: 4px; border: 1px solid #ccc;">
+            <option value="pending" selected>الرحلات المجدولة والجارية</option>
+            <option value="completed">الرحلات المنتهية ✔️</option>
+            <option value="all">جميع الرحلات 🌐</option>
+        </select>
     </div>
+    <ul class="schedule-list" id="scheduleList">
+        <!-- سيتم تعبئتها وتصفيتها برمجياً -->
+    </ul>
 </div>
 
 <script src="/js/driver-core.js"></script>

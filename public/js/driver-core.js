@@ -3,6 +3,7 @@ let currentDriverId = null;
 let driverMap = null;
 let driverMarker = null;
 let watchId = null;
+let allDriverTrips = []; // [تعديل] مصفوفة عامة لتخزين جميع رحلات السائق وتمكين فلترتها
 
 // التعرف التلقائي على السائق عند تحميل الصفحة
 window.addEventListener('DOMContentLoaded', async () => {
@@ -26,26 +27,25 @@ function logout() {
 }
 
 // ==========================================
-// [محدث] جلب رحلات اليوم وفرزها 
+// [محدث] جلب رحلات السائق وتخزينها محلياً
 // ==========================================
 async function loadDriverTrip() {
     if (!currentDriverId) return;
 
     try {
         const res = await fetch(`/api/trips/driver/${currentDriverId}/today`);
-        const trips = await res.json();
+        allDriverTrips = await res.json(); // [تعديل] تخزين الرحلات في المتغير العام
 
         const tripCard = document.getElementById('tripCard');
         const noTripMsg = document.getElementById('noTripMessage');
         const scheduleBox = document.getElementById('dailyScheduleBox');
-        const scheduleList = document.getElementById('scheduleList');
         const mapDiv = document.getElementById('driverMap');
 
-        if (trips.length > 0) {
+        if (allDriverTrips.length > 0) {
             scheduleBox.style.display = 'block';
             
             // 1. استخراج الرحلة الحالية (الجارية أو أول رحلة مجدولة)
-            const currentTrip = trips.find(t => t.status === 'active') || trips.find(t => t.status === 'pending');
+            const currentTrip = allDriverTrips.find(t => t.status === 'active') || allDriverTrips.find(t => t.status === 'pending');
 
             if (currentTrip) {
                 noTripMsg.style.display = 'none';
@@ -88,25 +88,8 @@ async function loadDriverTrip() {
                 if (watchId) navigator.geolocation.clearWatch(watchId);
             }
 
-            // 2. تعبئة قائمة الرحلات في أسفل الشاشة
-            let scheduleHtml = '';
-            trips.forEach(t => {
-                let statusIcon = '';
-                if(t.status === 'completed') statusIcon = '✔️ منتهية';
-                else if(t.status === 'cancelled') statusIcon = '❌ ملغاة';
-                else if(t.status === 'active') statusIcon = '🟢 جارية';
-                else statusIcon = '⏳ مجدولة';
-
-                const timeStr = t.scheduled_time ? new Date(t.scheduled_time).toLocaleTimeString('ar-JO', { hour: '2-digit', minute: '2-digit' }) : 'غير محدد';
-                
-                scheduleHtml += `
-                    <li>
-                        <strong>${t.route_name}</strong> - 🕒 ${timeStr} <br>
-                        <span style="font-size:12px; color:#666;">الحافلة: ${t.bus_plate} | الحالة: ${statusIcon}</span>
-                    </li>
-                `;
-            });
-            scheduleList.innerHTML = scheduleHtml;
+            // 2. [تعديل] استدعاء دالة التصفية لعرض الجدول بناءً على خيار السائق
+            filterDriverTrips();
 
         } else {
             tripCard.style.display = 'none'; mapDiv.style.display = 'none'; scheduleBox.style.display = 'none'; noTripMsg.style.display = 'block';
@@ -115,7 +98,52 @@ async function loadDriverTrip() {
 }
 
 // ==========================================
-// [محدث] تغيير حالة الرحلة + حماية الوقت (4 ساعات) والملاحظات
+// [جديد] دالة تصفية وعرض الرحلات حسب اختيار السائق من القائمة المنسدلة
+// ==========================================
+function filterDriverTrips() {
+    const filterSelect = document.getElementById('tripFilterSelect');
+    const filterValue = filterSelect ? filterSelect.value : 'pending';
+    const scheduleList = document.getElementById('scheduleList');
+    if (!scheduleList) return;
+
+    let filtered = allDriverTrips;
+
+    // تطبيق معايير التصفية
+    if (filterValue === 'pending') {
+        filtered = allDriverTrips.filter(t => t.status === 'pending' || t.status === 'active');
+    } else if (filterValue === 'completed') {
+        filtered = allDriverTrips.filter(t => t.status === 'completed');
+    } else if (filterValue === 'all') {
+        filtered = allDriverTrips; // عرض جميع الرحلات
+    }
+
+    if (filtered.length === 0) {
+        scheduleList.innerHTML = `<li style="text-align: center; color: #777; padding: 15px;">لا توجد رحلات تطابق هذا الخيار</li>`;
+        return;
+    }
+
+    let scheduleHtml = '';
+    filtered.forEach(t => {
+        let statusIcon = '';
+        if(t.status === 'completed') statusIcon = '✔️ منتهية';
+        else if(t.status === 'cancelled') statusIcon = '❌ ملغاة';
+        else if(t.status === 'active') statusIcon = '🟢 جارية';
+        else statusIcon = '⏳ مجدولة';
+
+        const timeStr = t.scheduled_time ? new Date(t.scheduled_time).toLocaleString('ar-JO', { dateStyle: 'short', timeStyle: 'short' }) : 'غير محدد';
+        
+        scheduleHtml += `
+            <li style="padding: 10px 0; border-bottom: 1px solid #eee;">
+                <strong>${t.route_name}</strong> - 🕒 ${timeStr} <br>
+                <span style="font-size:12px; color:#666;">الحافلة: ${t.bus_plate} | الحالة: ${statusIcon}</span>
+            </li>
+        `;
+    });
+    scheduleList.innerHTML = scheduleHtml;
+}
+
+// ==========================================
+// تغيير حالة الرحلة + حماية الوقت (4 ساعات) والملاحظات
 // ==========================================
 async function changeTripStatus(newStatus) {
     const tripId = document.getElementById('currentTripId').value;
@@ -127,16 +155,13 @@ async function changeTripStatus(newStatus) {
     if (newStatus === 'active' && scheduledTimeStr) {
         const scheduledTime = new Date(scheduledTimeStr);
         const now = new Date();
-        // حساب الفرق بالساعات بين وقت الرحلة والوقت الحالي
         const diffHours = (scheduledTime - now) / (1000 * 60 * 60);
 
-        // 1. منع بدء الرحلة إذا كان متبقي أكثر من 4 ساعات
         if (diffHours > 4) {
             alert("⚠️ لا يمكنك بدء الرحلة قبل موعدها بأكثر من 4 ساعات.");
             return;
         }
 
-        // 2. إجبار السائق على كتابة ملاحظة إذا بدأ الرحلة مبكراً (قبل موعدها ولو بدقيقة)
         if (diffHours > 0) {
             const reason = prompt("أنت تقوم ببدء الرحلة قبل موعدها المجدول. يرجى كتابة السبب (إلزامي):");
             if (reason === null || reason.trim() === "") {
@@ -162,7 +187,7 @@ async function changeTripStatus(newStatus) {
 }
 
 // ==========================================
-// دالة الإلغاء وتتبع الـ GPS (بدون تغيير)
+// دالة الإلغاء وتتبع الـ GPS
 // ==========================================
 async function cancelTrip() {
     const tripId = document.getElementById('currentTripId').value;
@@ -170,7 +195,6 @@ async function cancelTrip() {
     const reason = prompt("يرجى إدخال سبب الإلغاء:");
     if (reason === null || reason.trim() === "") { alert("يجب كتابة سبب الإلغاء لإتمام العملية."); return; }
     
-    // نستخدم مسار cancel الموجود مسبقاً في routes/trips.js
     const res = await fetch(`/api/trips/${tripId}/cancel`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
