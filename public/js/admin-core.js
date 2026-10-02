@@ -13,7 +13,6 @@ function showSection(sectionId) {
 }
 
 // ================= إدارة الرحلات =================
-// ================= إدارة الرحلات (مصحح بالكامل) =================
 let isEditingTrip = false;
 
 // دالة دقيقة لتنسيق التاريخ المحلي لحقول datetime-local دون أخطاء توقيت
@@ -28,7 +27,6 @@ function formatLocalDateTime(dateString) {
     const minutes = String(d.getMinutes()).padStart(2, '0');
     return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
-
 
 // دالة نسخ رحلات الشهر الحالي إلى الشهر القادم
 async function copyNextMonthTrips() {
@@ -55,21 +53,36 @@ async function copyNextMonthTrips() {
     }
 }
 
+// ==========================================
+// [تعديل] تحميل القوائم المنسدلة للجدولة مع إظهار الـ IDs
+// ==========================================
 async function loadTripDropdowns() {
     try {
-        const resU = await fetch('/api/users'); const users = await resU.json();
-        document.getElementById('tripDriver').innerHTML = '<option value="" disabled selected>-- اختر السائق --</option>' + users.filter(u => u.role === 'driver').map(d => `<option value="${d.id}">${d.full_name}</option>`).join('');
+        // 1. تحميل السائقين مع إظهار الـ ID
+        const resU = await fetch('/api/users'); 
+        const users = await resU.json();
+        document.getElementById('tripDriver').innerHTML = '<option value="" disabled selected>-- اختر السائق --</option>' + 
+            users.filter(u => u.role === 'driver').map(d => `<option value="${d.id}">(ID: ${d.id}) ${d.full_name}</option>`).join('');
 
-        const resB = await fetch('/api/buses'); const buses = await resB.json();
-        document.getElementById('tripBus').innerHTML = '<option value="" disabled selected>-- اختر الحافلة --</option>' + buses.map(b => `<option value="${b.id}">${b.plate_number} (سعة: ${b.capacity})</option>`).join('');
+        // 2. تحميل الحافلات مع إظهار الـ ID
+        const resB = await fetch('/api/buses'); 
+        const buses = await resB.json();
+        document.getElementById('tripBus').innerHTML = '<option value="" disabled selected>-- اختر الحافلة --</option>' + 
+            buses.map(b => `<option value="${b.id}">(ID: ${b.id}) ${b.plate_number} (سعة: ${b.capacity})</option>`).join('');
 
-        const resR = await fetch('/api/routes'); const routes = await resR.json();
-        document.getElementById('tripRoute').innerHTML = '<option value="" disabled selected>-- اختر المسار --</option>' + routes.map(r => `<option value="${r.id}">${r.route_name}</option>`).join('');
+        // 3. تحميل المسارات مع إظهار الـ ID
+        const resR = await fetch('/api/routes'); 
+        const routes = await resR.json();
+        document.getElementById('tripRoute').innerHTML = '<option value="" disabled selected>-- اختر المسار --</option>' + 
+            routes.map(r => `<option value="${r.id}">(ID: ${r.id}) ${r.route_name}</option>`).join('');
     } catch (err) {
         console.error('خطأ في تحميل القوائم:', err);
     }
 }
 
+// ==========================================
+// [تعديل] جلب جدول الرحلات وإظهار ID السائق في الجدول
+// ==========================================
 async function fetchTrips() {
     try {
         const res = await fetch('/api/trips');
@@ -78,11 +91,11 @@ async function fetchTrips() {
             let statusAr = t.status === 'pending' ? '<span class="status-pending">مجدولة ⏳</span>' : t.status === 'active' ? '<span class="status-active">جارية 🟢</span>' : '<span style="color:gray;">مكتملة ✔️</span>';
             let alertBtn = (t.status === 'active' || t.status === 'pending') ? `<button class="btn-alert" onclick="sendAlertToDriver('${t.driver_name}', ${t.id})">🔔 تنبيه</button>` : '';
             
-            // تمرير التاريخ الخام كما هو للتعامل معه برمجياً بأمان
             const safeTimeStr = t.scheduled_time;
 
             return `<tr>
-                <td>${t.driver_name}</td>
+                <!-- [تعديل] إظهار رقم الـ ID للسائق بجانب اسمه في الجدول -->
+                <td>(ID: ${t.driver_id}) ${t.driver_name}</td>
                 <td>${t.bus_plate}</td>
                 <td>${t.route_name}</td>
                 <td dir="ltr">${new Date(t.scheduled_time).toLocaleString('ar-EG')}</td>
@@ -139,7 +152,6 @@ function editTrip(id, driverId, busId, routeId, timeStr) {
     document.getElementById('tripBus').value = busId;
     document.getElementById('tripRoute').value = routeId;
     
-    // استخدام الدالة الدقيقة لتعبئة حقل التاريخ والوقت
     document.getElementById('tripTime').value = formatLocalDateTime(timeStr);
 
     document.getElementById('tripFormTitle').innerText = '✏️ تعديل بيانات الرحلة';
@@ -276,7 +288,7 @@ function editRoute(id, name, desc) {
     isEditingRoute = true; document.getElementById('routeCancelBtn').style.display = 'block';
     document.getElementById('routeId').value = id; document.getElementById('routeName').value = name; document.getElementById('routeDesc').value = desc;
 }
-function resetRouteForm() { isEditingRoute = false; document.getElementById('routeForm').reset(); document.getElementById('routeId').value = ''; document.getElementById('routeCancelBtn').style.display = 'none'; }
+function resetRouteForm() { isEditingDate = false; document.getElementById('routeForm').reset(); document.getElementById('routeId').value = ''; document.getElementById('routeCancelBtn').style.display = 'none'; }
 async function deleteRoute(id) { if(confirm('تأكيد الحذف؟')) { await fetch(`/api/routes/${id}`, { method: 'DELETE' }); fetchRoutes(); } }
 
 // بدء التشغيل
