@@ -84,14 +84,14 @@ app.post('/api/login', async (req, res) => {
 app.get('/api/trips/driver/:id/today', async (req, res) => {
     const driverId = req.params.id;
     try {
-        // جلب الرحلات التي حالتها pending أو active، ووقت انطلاقها من الآن فصاعداً (أو الحالية)
+        // جلب كل الرحلات غير المنتهية والملغاة للسائق للتأكد من ظهورها
         const result = await db.query(
             `SELECT t.id, t.route_id, r.name as route_name, b.plate_number as bus_plate, t.status, t.scheduled_time 
              FROM trips t
              JOIN routes r ON t.route_id = r.id
              JOIN buses b ON t.bus_id = b.id
              WHERE t.driver_id = $1 
-             AND t.scheduled_time >= NOW()
+             AND t.status IN ('pending', 'active')
              ORDER BY t.scheduled_time ASC`,
             [driverId]
         );
