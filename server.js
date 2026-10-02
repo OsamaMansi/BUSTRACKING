@@ -79,18 +79,18 @@ app.post('/api/login', async (req, res) => {
 });
 
 // ==========================================
-// --- جلب كل رحلات السائق المجدولة في المستقبل ---
+// --- جلب كل رحلات السائق المستقبلية والمجدولة ---
 // ==========================================
 app.get('/api/trips/driver/:id/today', async (req, res) => {
     const driverId = req.params.id;
     try {
+        // تم تصحيح اسم الجدول إلى bus_routes بدلاً من routes
         const result = await db.query(
             `SELECT t.id, t.route_id, r.route_name as route_name, b.plate_number as bus_plate, t.status, t.scheduled_time 
              FROM trips t
-             JOIN routes r ON t.route_id = r.id
+             JOIN bus_routes r ON t.route_id = r.id
              JOIN buses b ON t.bus_id = b.id
              WHERE t.driver_id = $1 
-             AND t.status IN ('pending', 'active')
              ORDER BY t.scheduled_time ASC`,
             [driverId]
         );
