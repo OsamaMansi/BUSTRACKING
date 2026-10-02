@@ -5,21 +5,44 @@ let driverMarker = null;
 let watchId = null;
 let countdownInterval = null;
 
+// ==========================================
+// [تعديل] التعرف التلقائي على السائق عند تحميل الصفحة
+// ==========================================
 window.addEventListener('DOMContentLoaded', async () => {
-    try {
-        const res = await fetch('/api/users');
-        const users = await res.json();
-        const drivers = users.filter(u => u.role === 'driver');
-        
-        document.getElementById('driverSelector').innerHTML = '<option value="" disabled selected>-- اختر اسمك --</option>' + 
-            drivers.map(d => `<option value="${d.id}">${d.full_name}</option>`).join('');
-    } catch (err) {
-        console.error("خطأ في التحميل", err);
+    // 1. التحقق من تسجيل الدخول
+    const userStr = localStorage.getItem('currentUser');
+    if (!userStr) {
+        window.location.href = '/login.html'; // طرد المستخدم إذا لم يسجل دخول
+        return;
     }
+    
+    const currentUser = JSON.parse(userStr);
+    
+    // 2. الحماية: التأكد أن من دخل هو سائق فعلاً
+    if (currentUser.role !== 'driver') {
+        alert("عذراً، هذه الشاشة مخصصة للسائقين فقط.");
+        window.location.href = '/login.html';
+        return;
+    }
+
+    // 3. تعيين هوية السائق تلقائياً من بيانات الدخول المحفوظة
+    currentDriverId = currentUser.id;
+    document.getElementById('driverNameDisplay').innerText = currentUser.full_name;
+
+    // 4. استدعاء بيانات رحلته مباشرة دون تدخل منه
+    await loadDriverTrip();
 });
 
+// [جديد] دالة تسجيل الخروج
+function logout() {
+    localStorage.removeItem('currentUser');
+    window.location.href = '/login.html';
+}
+
+// ==========================================
+// جلب وعرض رحلة السائق
+// ==========================================
 async function loadDriverTrip() {
-    currentDriverId = document.getElementById('driverSelector').value;
     if (!currentDriverId) return;
 
     try {
@@ -31,6 +54,7 @@ async function loadDriverTrip() {
         const btnStart = document.getElementById('btnStart');
         const btnComplete = document.getElementById('btnComplete');
         const btnArrived = document.getElementById('btnArrivedStop');
+        const btnCancel = document.getElementById('btnCancel'); // زر الإلغاء الجديد
         const mapDiv = document.getElementById('driverMap');
 
         if (trip && trip.id) {
@@ -45,9 +69,11 @@ async function loadDriverTrip() {
 
             initDriverMap(trip.route_id);
 
+            // التحكم بظهور الأزرار حسب حالة الرحلة
             if (trip.status === 'pending') {
                 document.getElementById('lblStatus').innerText = 'مجدولة ⏳';
                 btnStart.style.display = 'block';
+                btnCancel.style.display = 'block'; // يمكن إلغاؤها قبل البدء
                 btnComplete.style.display = 'none';
                 btnArrived.style.display = 'none';
             } else if (trip.status === 'active') {
@@ -55,8 +81,10 @@ async function loadDriverTrip() {
                 btnStart.style.display = 'none';
                 btnComplete.style.display = 'block';
                 btnArrived.style.display = 'block';
+                btnCancel.style.display = 'block'; // يمكن إلغاؤها أثناء السير لطارئ
             }
         } else {
+            // لا توجد رحلات
             tripCard.style.display = 'none';
             noTripMsg.style.display = 'block';
             mapDiv.style.display = 'none';
@@ -67,7 +95,41 @@ async function loadDriverTrip() {
     }
 }
 
-// تهيئة خريطة السائق وتتبع الموقع وإرساله للركاب
+// ==========================================
+// [جديد] دالة إلغاء الرحلة
+// ==========================================
+async function cancelTrip() {
+    const tripId = document.getElementById('currentTripId').value;
+    if (!tripId) return;
+
+    // طلب إدخال سبب الإلغاء (نافذة منبثقة)
+    const reason = prompt("يرجى إدخال سبب الإلغاء (مثال: عطل في الحافلة، إغلاق طرق):");
+    
+    // التحقق من أن السائق أدخل سبباً ولم يضغط Cancel
+    if (reason === null || reason.trim() === "") {
+        alert("يجب كتابة سبب الإلغاء لإتمام العملية.");
+        return; 
+    }
+
+    // إرسال التحديث للسيرفر
+    const res = await fetch(`/api/trips/${tripId}/cancel`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'cancelled', cancellation_reason: reason.trim() })
+    });
+
+    if (res.ok) {
+        alert("تم إلغاء الرحلة بنجاح.");
+        if (watchId) navigator.geolocation.clearWatch(watchId); // إيقاف الـ GPS
+        loadDriverTrip(); // تحديث الواجهة لإخفاء الخريطة
+    } else {
+        alert("حدث خطأ، يرجى المحاولة مرة أخرى.");
+    }
+}
+
+// ==========================================
+// تهيئة الخريطة وتتبع الـ GPS (الكود السابق المستقر)
+// ==========================================
 async function initDriverMap(routeId) {
     if (!driverMap) {
         driverMap = L.map('driverMap').setView([31.95, 35.91], 13);
@@ -90,7 +152,6 @@ async function initDriverMap(routeId) {
         }
     } catch(err) { console.error(err); }
 
-    // تتبع موقع السائق عبر GPS وإرساله للركاب لحظياً
     if (navigator.geolocation) {
         if (watchId) navigator.geolocation.clearWatch(watchId);
         
@@ -106,20 +167,16 @@ async function initDriverMap(routeId) {
                 driverMarker.setLatLng([lat, lng]);
             }
 
-            // [الإضافة الجديدة]: جعل الخريطة تتحرك وتتمركز حول السائق فور تغير موقعه
             driverMap.panTo([lat, lng]);
 
-            // إرسال الإحداثيات للركاب عبر الـ Socket.io
             const currentRouteId = document.getElementById('currentRouteId').value;
             if (currentRouteId) {
                 socket.emit('updateBusLocation', { routeId: currentRouteId, lat, lng, driverId: currentDriverId });
             }
-
         }, err => console.log(err), { enableHighAccuracy: true });
     }
 }
 
-// العداد التنازلي للمحطة
 function startStationDwell(durationSeconds) {
     const timerBox = document.getElementById('dwellTimerBox');
     const display = document.getElementById('timerDisplay');
@@ -164,7 +221,9 @@ async function changeTripStatus(newStatus) {
     }
 }
 
-// استقبال تنبيهات الإدارة
+// ==========================================
+// الـ WebSockets واستقبال التنبيهات
+// ==========================================
 socket.on('adminSendAlert', (data) => {
     if (currentDriverId && data.driverId == currentDriverId) {
         const alertBox = document.getElementById('alertBox');
@@ -176,19 +235,17 @@ socket.on('adminSendAlert', (data) => {
     }
 });
 
-// **تنبيه الركاب (الومضة المتقطعة)**
 socket.on('driverPassengerAlert', (data) => {
     const currentRouteId = document.getElementById('currentRouteId').value;
     if (data.routeId == currentRouteId) {
         const alertBox = document.getElementById('alertBox');
         alertBox.innerHTML = `🚨 <b>تنبيه عاجل:</b> ${data.message}`;
         alertBox.style.display = 'block';
-        alertBox.style.backgroundColor = '#dc3545'; // أحمر طارئ
-        alertBox.style.animation = 'pulse 0.8s infinite'; // تفعيل الومضة المتقطعة
+        alertBox.style.backgroundColor = '#dc3545'; 
+        alertBox.style.animation = 'pulse 0.8s infinite'; 
     }
 });
 
-// إلغاء تنبيه الراكب
 socket.on('driverCancelPassengerAlert', (data) => {
     const currentRouteId = document.getElementById('currentRouteId').value;
     if (data.routeId == currentRouteId) {

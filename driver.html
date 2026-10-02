@@ -4,12 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>تطبيق السائق - الملاحة والتشغيل</title>
-    <!-- مكتبة الخرائط Leaflet -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="/socket.io/socket.io.js"></script>
-    <!-- ملف التصميم المنفصل -->
     <link rel="stylesheet" href="/css/driver-style.css" />
+    <style>
+        /* تصاميم الأقسام الجديدة */
+        .driver-welcome {
+            background: #e9ecef; padding: 15px; border-radius: 8px; margin-bottom: 15px;
+            display: flex; justify-content: space-between; align-items: center; border: 1px solid #ddd;
+        }
+        .driver-welcome h3 { margin: 0; color: #333; font-size: 16px; }
+        .btn-logout { background: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;}
+        .btn-cancel { background: #dc3545; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; width: 100%; margin-top: 8px; font-weight: bold;}
+    </style>
 </head>
 <body>
 
@@ -19,12 +27,10 @@
     </div>
 
     <div class="content">
-        <!-- اختيار السائق -->
-        <div class="driver-select-box">
-            <label style="display:block; margin-bottom:5px; font-weight:bold; font-size:14px;">اختر حساب السائق:</label>
-            <select id="driverSelector" onchange="loadDriverTrip()">
-                <option value="" disabled selected>-- جاري التحميل --</option>
-            </select>
+        <!-- [جديد] شاشة الترحيب وتسجيل الخروج بدلاً من اختيار السائق -->
+        <div class="driver-welcome">
+            <h3>أهلاً بك: <span id="driverNameDisplay" style="color: #007bff;"></span></h3>
+            <button class="btn-logout" onclick="logout()">خروج</button>
         </div>
 
         <div id="alertBox" class="alert-box"></div>
@@ -33,7 +39,7 @@
         <div id="driverMap"></div>
 
         <div id="noTripMessage" class="no-trip">
-            ☕ لا توجد رحلات مجدولة لك حالياً.
+            ☕ لا توجد مهام إضافية في جدولك اليوم.
         </div>
 
         <!-- تفاصيل الرحلة -->
@@ -46,8 +52,7 @@
             <input type="hidden" id="currentTripId">
             <input type="hidden" id="currentRouteId">
 
-            <!-- صندوق العد التنازلي للتوقف -->
-            <div id="dwellTimerBox" class="timer-box">
+            <div id="dwellTimerBox" class="timer-box" style="display: none;">
                 <div style="font-size: 13px; color: #856404; font-weight: bold;">⏳ وقت الانتظار المتبقي بالمحطة:</div>
                 <div id="timerDisplay" class="timer-display">02:00</div>
                 <button onclick="skipDwellTime()" style="background:#856404; color:white; border:none; padding:5px 10px; border-radius:4px; margin-top:5px; cursor:pointer;">تخطي والتحرك ➔</button>
@@ -55,7 +60,10 @@
             
             <button id="btnStart" class="btn btn-start" onclick="changeTripStatus('active')" style="display: none;">▶️ بدء الرحلة</button>
             <button id="btnComplete" class="btn btn-complete" onclick="changeTripStatus('completed')" style="display: none;">✔️ إنهاء الرحلة</button>
-            <button id="btnArrivedStop" class="btn" style="background: #17a2b8; display: none;" onclick="startStationDwell(120)">🚏 وصلت محطة وقوف (بدء العداد)</button>
+            <button id="btnArrivedStop" class="btn" style="background: #17a2b8; display: none;" onclick="startStationDwell(120)">🚏 وصلت محطة وقوف</button>
+            
+            <!-- [جديد] زر إلغاء الرحلة -->
+            <button id="btnCancel" class="btn-cancel" onclick="cancelTrip()" style="display: none;">❌ طارئ: إلغاء الرحلة</button>
         </div>
     </div>
 </div>

@@ -193,4 +193,23 @@ router.patch('/:id/status', async (req, res) => {
     }
 });
 
+// ==========================================
+// [جديد] مسار إلغاء الرحلة من قبل السائق وتسجيل السبب
+// ==========================================
+router.patch('/:id/cancel', async (req, res) => {
+    const tripId = req.params.id;
+    const { status, cancellation_reason } = req.body;
+    
+    try {
+        await db.query(
+            `UPDATE trips SET status = $1, cancellation_reason = $2 WHERE id = $3`,
+            [status, cancellation_reason, tripId]
+        );
+        res.json({ message: 'تم إلغاء الرحلة بنجاح وتسجيل السبب' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'خطأ داخلي في الخادم أثناء إلغاء الرحلة' });
+    }
+});
+
 module.exports = router;
