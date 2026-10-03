@@ -17,29 +17,31 @@ const io = new Server(server, {
     cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
-// ====== مسارات إعدادات المؤسسة ======
+// ================= إعدادات المؤسسة (محدث ليتعامل مع رفع الصور) =================
 app.get('/api/settings', async (req, res) => {
-    const { data, error } = await supabase.from('settings').select('*').eq('id', 1).single();
-    if (error) return res.status(500).json({ error: error.message });
-    res.json(data || {});
+    try {
+        const { data, error } = await supabase.from('settings').select('*').eq('id', 1).single();
+        if (error && error.code !== 'PGRST116') { // PGRST116 يعني لا توجد بيانات
+            return res.status(400).json({ error: error.message });
+        }
+        res.json(data || {});
+    } catch (err) {
+        res.status(500).json({ error: "Server Error" });
+    }
 });
 
 app.put('/api/settings', async (req, res) => {
     const { company_name, logo_url, contact_phone, contact_email, address } = req.body;
-    const { data, error } = await supabase.from('settings')
-        .upsert({ id: 1, company_name, logo_url, contact_phone, contact_email, address, updated_at: new Date() })
-        .select();
-    if (error) return res.status(500).json({ error: error.message });
-    res.json({ message: 'تم حفظ إعدادات المؤسسة بنجاح', data });
+    try {
+        const { data, error } = await supabase.from('settings')
+            .upsert({ id: 1, company_name, logo_url, contact_phone, contact_email, address, updated_at: new Date() })
+            .select();
+        if (error) return res.status(400).json({ error: error.message });
+        res.json({ message: 'تم حفظ الإعدادات بنجاح', data });
+    } catch (err) {
+        res.status(500).json({ error: "Server Error" });
+    }
 });
-
-const PORT = process.env.PORT || 3000;
-
-app.use(cors());
-// السماح للسيرفر بفهم البيانات المرسلة بصيغة JSON
-app.use(express.json());
-// جعل مجلد public متاحاً للعامة (يحتوي على ملفات التصميم css والسكربت js)
-app.use(express.static(path.join(__dirname, 'public')));
 
 // ==========================================
 // --- استدعاء المسارات المنفصلة (Routes) ---

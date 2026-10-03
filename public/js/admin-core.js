@@ -424,10 +424,11 @@ async function deleteRoute(id) {
 }
 
 // ==========================================
-// [إضافة] شاشة المراقبة العامة للباصات (Global Fleet Monitoring)
+// شاشة المراقبة العامة للباصات (Global Fleet Monitoring) - محرك الفلترة الذكي
 // ==========================================
 let globalMonitoringMap = null;
 let monitoringMarkers = {}; 
+let globalFleetData = []; // تخزين مؤقت لبيانات الأسطول للفلترة الفورية
 
 function initGlobalMonitoringMap() {
     if (!globalMonitoringMap) {
@@ -442,54 +443,125 @@ function initGlobalMonitoringMap() {
 async function fetchActiveFleetData() {
     try {
         const res = await fetch('/api/trips'); 
-        const trips = await res.json();
+        globalFleetData = await res.json();
         
-        const sidebarList = document.getElementById('globalFleetList');
-        if(!sidebarList) return;
-
-        sidebarList.innerHTML = trips.map(t => {
-            let badgeColor = t.status === 'active' ? '#28a745' : t.status === 'pending' ? '#ffc107' : '#6c757d';
-            let statusText = t.status === 'active' ? '🟢 سائر الآن' : t.status === 'pending' ? '⏳ مجدولة' : '✔ منتهية/متوقفة';
-            return `
-                <div style="padding: 10px; border-bottom: 1px solid #eee; cursor: pointer;" onclick="focusOnBus(${t.id})">
-                    <strong>باص: ${t.bus_plate}</strong> <span style="font-size:11px; background:${badgeColor}; color:white; padding:2px 6px; border-radius:4px;">${statusText}</span><br>
-                    <small>السائق: ${t.driver_name} | المسار: ${t.route_name}</small>
-                </div>
-            `;
-        }).join('');
+        // التعبئة التلقائية لقائمة المسارات في شريط الفلترة
+        const routeFilter = document.getElementById('monitorRouteFilter');
+        if (routeFilter && routeFilter.options.length <= 1) {
+            const uniqueRoutes = [...new Set(globalFleetData.map(t => t.route_name))];
+            uniqueRoutes.forEach(r => {
+                if (r) routeFilter.innerHTML += `<option value="${r}">${r}</option>`;
+            });
+        }
+        
+        // استدعاء دالة الفرز لرسم القائمة
+        filterLiveFleet();
     } catch(err) { console.error("خطأ في تحديث الأسطول العام:", err); }
 }
 
+// الفلترة اللحظية الذكية وعرض البطاقات
+function filterLiveFleet() {
+    const statusF = document.getElementById('monitorStatusFilter').value;
+    const routeF = document.getElementById('monitorRouteFilter').value;
+    const sidebarList = document.getElementById('globalFleetList');
+    const countDisplay = document.getElementById('fleetCount');
+    if(!sidebarList) return;
+
+    let filtered = globalFleetData;
+
+    // الفلترة حسب الحالة
+    if (statusF !== 'all') {
+        if (statusF === 'stopped') {
+            filtered = filtered.filter(t => t.status === 'completed' || t.status === 'cancelled');
+        } else {
+            filtered = filtered.filter(t => t.status === statusF);
+        }
+    }
+    
+    // الفلترة حسب المسار
+    if (routeF !== 'all') {
+        filtered = filtered.filter(t => t.route_name === routeF);
+    }
+
+    countDisplay.innerText = filtered.length;
+
+    if (filtered.length === 0) {
+        sidebarList.innerHTML = '<div style="text-align:center; padding:30px; color:#777; font-size:14px;">لا توجد حافلات تطابق خيارات التصفية الحالية</div>';
+        return;
+    }
+
+    // تصميم بطاقات الحافلات الاحترافي
+    sidebarList.innerHTML = filtered.map(t => {
+        let badgeColor = t.status === 'active' ? '#28a745' : t.status === 'pending' ? '#ffc107' : '#dc3545';
+        let statusText = t.status === 'active' ? '🟢 سائر الآن' : t.status === 'pending' ? '⏳ مجدولة' : '🛑 متوقفة';
+        
+        return `
+            <div style="padding: 15px; margin-bottom: 12px; background: white; border: 1px solid #e0e0e0; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.04); cursor: pointer; transition: 0.2s;" onmouseover="this.style.borderColor='#007bff'" onmouseout="this.style.borderColor='#e0e0e0'" onclick="focusOnBus(${t.id})">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <strong style="font-size: 15px; color: #2c3e50;">باص: ${t.bus_plate}</strong> 
+                    <span style="font-size: 12px; background: ${badgeColor}; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold;">${statusText}</span>
+                </div>
+                <div style="font-size: 13px; color: #555; margin-bottom: 4px;">👤 <b>السائق:</b> ${t.driver_name}</div>
+                <div style="font-size: 13px; color: #555;">🗺️ <b>المسار:</b> ${t.route_name}</div>
+            </div>
+        `;
+    }).join('');
+}
+
 function focusOnBus(tripId) {
-    alert("سيتم التركيز على الحافلة رقم الرحلة: " + tripId);
+    alert("سيتم التركيز على الخريطة للحافلة رقم الرحلة: " + tripId);
 }
 
 socket.on('busLocationUpdated', (data) => {
     console.log("تحديث موقع باص على الشاشة العامة:", data);
 });
 
-// ================= إعدادات المؤسسة =================
+// ==========================================
+// إعدادات المؤسسة (تتضمن معالجة الصور Base64)
+// ==========================================
+
+// دالة معاينة الصورة وتحويلها إلى Base64
+function previewLogo(event) {
+    const file = event.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const base64String = e.target.result;
+            document.getElementById('settingLogoBase64').value = base64String;
+            const preview = document.getElementById('logoPreview');
+            preview.src = base64String;
+            preview.style.display = 'inline-block';
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
 async function fetchSettings() {
     try {
         const res = await fetch('/api/settings');
+        if (!res.ok) throw new Error('فشل في استرجاع الإعدادات');
         const settings = await res.json();
         if (settings.company_name) {
             document.getElementById('settingCompanyName').value = settings.company_name || '';
-            document.getElementById('settingLogoUrl').value = settings.logo_url || '';
             document.getElementById('settingPhone').value = settings.contact_phone || '';
             document.getElementById('settingEmail').value = settings.contact_email || '';
             document.getElementById('settingAddress').value = settings.address || '';
+            
+            if (settings.logo_url) {
+                document.getElementById('settingLogoBase64').value = settings.logo_url;
+                const preview = document.getElementById('logoPreview');
+                preview.src = settings.logo_url;
+                preview.style.display = 'inline-block';
+            }
         }
-    } catch (err) {
-        console.error('خطأ في جلب إعدادات المؤسسة:', err);
-    }
+    } catch (err) { console.error('خطأ في جلب إعدادات المؤسسة:', err); }
 }
 
 document.getElementById('settingsForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const data = {
         company_name: document.getElementById('settingCompanyName').value,
-        logo_url: document.getElementById('settingLogoUrl').value,
+        logo_url: document.getElementById('settingLogoBase64').value, // إرسال النص المحول
         contact_phone: document.getElementById('settingPhone').value,
         contact_email: document.getElementById('settingEmail').value,
         address: document.getElementById('settingAddress').value
@@ -502,22 +574,21 @@ document.getElementById('settingsForm').addEventListener('submit', async (e) => 
             body: JSON.stringify(data)
         });
         const result = await res.json();
-        if (res.ok) {
-            alert('تم حفظ إعدادات المؤسسة بنجاح ✅');
-        } else {
-            alert('خطأ أثناء الحفظ: ' + result.error);
-        }
-    } catch (err) {
-        alert('حدث خطأ في الاتصال بالسيرفر.');
-    }
+        if (res.ok) { alert('تم حفظ إعدادات المؤسسة بنجاح ✅'); } 
+        else { alert('خطأ أثناء الحفظ: ' + result.error); }
+    } catch (err) { alert('حدث خطأ في الاتصال بالسيرفر.'); }
 });
 
-// تعديل بسيط على دالة showSection لتشمل جلب الإعدادات عند النقر عليها
+// دمج جلب الإعدادات مع دالة فتح الأقسام
 const originalShowSection = showSection;
 showSection = function(sectionId) {
     originalShowSection(sectionId);
     if(sectionId === 'settings') { fetchSettings(); }
 };
+
+// بدء التشغيل الأساسي
+fetchTrips();
+loadTripDropdowns();
 
 // بدء التشغيل
 fetchTrips();
