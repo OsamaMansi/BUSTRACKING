@@ -586,9 +586,6 @@ showSection = function(sectionId) {
     if(sectionId === 'settings') { fetchSettings(); }
 };
 
-// بدء التشغيل الأساسي
-fetchTrips();
-loadTripDropdowns();
 
 // بدء التشغيل
 fetchTrips();

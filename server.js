@@ -18,10 +18,11 @@ const io = new Server(server, {
 });
 
 // ================= إعدادات المؤسسة (محدث ليتعامل مع رفع الصور) =================
+// ================= مسارات إعدادات المؤسسة =================
 app.get('/api/settings', async (req, res) => {
     try {
         const { data, error } = await supabase.from('settings').select('*').eq('id', 1).single();
-        if (error && error.code !== 'PGRST116') { // PGRST116 يعني لا توجد بيانات
+        if (error && error.code !== 'PGRST116') {
             return res.status(400).json({ error: error.message });
         }
         res.json(data || {});
