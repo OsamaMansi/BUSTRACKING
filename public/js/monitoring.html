@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>مركز المراقبة والتحكم اللحظي</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+
+<style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; display: flex; flex-direction: row; background-color: #f4f6f9; height: 100vh; width: 100vw; overflow: hidden; }
+    
+    /* القائمة الجانبية (مقاس ثابت لا يتغير) */
+    .sidebar { width: 250px; min-width: 250px; background: #343a40; color: white; padding: 20px; box-sizing: border-box; height: 100vh; margin: 0; }
+    .sidebar h2 { margin-top: 0; font-size: 20px; text-align: center; border-bottom: 1px solid #4f5962; padding-bottom: 10px; }
+    .sidebar ul { list-style: none; padding: 0; }
+    .sidebar ul li { padding: 15px; cursor: pointer; border-bottom: 1px solid #4f5962; font-weight: bold; transition: 0.3s; }
+    .sidebar ul li:hover, .sidebar ul li.active { background: #007bff; }
+    
+    /* محتوى المراقبة (يأخذ بالضبط المساحة المتبقية من الشاشة) */
+    .content { flex-grow: 1; width: calc(100% - 250px); max-width: calc(100% - 250px); display: flex; flex-direction: column; padding: 20px; box-sizing: border-box; margin: 0; height: 100vh; }
+    
+    .header-bar { background: #2c3e50; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-radius: 8px 8px 0 0; }
+    .main-area { display: flex; flex: 1; background: #fff; border: 1px solid #ddd; border-top: none; border-radius: 0 0 8px 8px; overflow: hidden; }
+    .fleet-list { width: 350px; min-width: 350px; background: #f8f9fa; border-left: 1px solid #ddd; display: flex; flex-direction: column; }
+    .map-container { flex: 1; position: relative; }
+    
+    select, button { padding: 8px 12px; border-radius: 4px; border: 1px solid #ccc; font-family: Arial; font-weight: bold; }
+    button { background: #28a745; color: white; border: none; cursor: pointer; }
+    button:hover { background: #218838; }
+    .bus-icon { font-size: 24px; text-align: center; line-height: 30px; }
+</style>
+
+</head>
+<body>
+    <div class="sidebar">
+        <h2>لوحة الإدارة ⚙️</h2>
+        <ul>
+            <li onclick="window.location.href='/admin.html'">📅 الإدارة الرئيسية</li>
+            <li class="active">🌍 المراقبة الحية للأسطول</li>
+            <li onclick="window.location.href='/settings.html'" style="border-top: 1px solid #555; margin-top: 10px; padding-top: 10px;">🏢 إعدادات المؤسسة</li>
+            <li style="background: #dc3545; color: white; text-align: center; margin-top: 20px;" onclick="logout()">🚪 تسجيل الخروج</li>
+        </ul>
+    </div>
+    <div class="content">
+        <div class="header-bar">
+            <h2 style="margin: 0; font-size: 18px;">🌍 مركز المراقبة والتحكم اللحظي</h2>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <span style="font-size: 14px;">تصفية الأسطول:</span>
+                <select id="monitorStatusFilter" onchange="filterLiveFleet()">
+                    <option value="all">🌐 جميع الحافلات</option>
+                    <option value="active">🟢 الجارية الآن (في الميدان)</option>
+                    <option value="pending">⏳ المجدولة (قيد الانتظار)</option>
+                    <option value="stopped">🛑 المتوقفة / المنتهية</option>
+                </select>
+                <select id="monitorRouteFilter" onchange="filterLiveFleet()">
+                    <option value="all">🗺️ جميع المسارات</option>
+                </select>
+                <button onclick="fetchActiveFleetData()">🔄 تحديث فوري</button>
+            </div>
+        </div>
+        <div class="main-area">
+            <div class="fleet-list">
+                <div style="padding: 12px; background: #e9ecef; border-bottom: 1px solid #ddd; font-weight: bold; text-align: center; color:#333;">
+                    📋 الأسطول النشط (<span id="fleetCount">0</span>)
+                </div>
+                <div id="globalFleetList" style="flex: 1; overflow-y: auto; padding: 12px;">
+                    <!-- سيتم عرض الحافلات هنا -->
+                </div>
+            </div>
+            <div class="map-container">
+                <div id="globalMonitoringMapDiv" style="width: 100%; height: 100%; position: absolute; top:0; left:0;"></div>
+            </div>
+        </div>
+    </div>
+    <script src="/js/monitoring.js"></script>
+</body>
+</html>

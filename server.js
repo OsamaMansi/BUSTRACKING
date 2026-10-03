@@ -17,6 +17,14 @@ const io = new Server(server, {
     cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
+const express = require('express');
+const app = express();
+
+// ⬇️ أضف هذين السطرين لفك قيود حجم الصورة (Base64) ⬇️
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ limit: '5mb', extended: true }));
+
+
 // ================= إعدادات المؤسسة (محدث ليتعامل مع رفع الصور) =================
 // ================= مسارات إعدادات المؤسسة =================
 app.get('/api/settings', async (req, res) => {
@@ -37,9 +45,14 @@ app.put('/api/settings', async (req, res) => {
         const { data, error } = await supabase.from('settings')
             .upsert({ id: 1, company_name, logo_url, contact_phone, contact_email, address, updated_at: new Date() })
             .select();
-        if (error) return res.status(400).json({ error: error.message });
+            
+        if (error) {
+            console.error("Supabase Error:", error.message);
+            return res.status(400).json({ error: error.message });
+        }
         res.json({ message: 'تم حفظ الإعدادات بنجاح', data });
     } catch (err) {
+        console.error("Server Error:", err);
         res.status(500).json({ error: "Server Error" });
     }
 });
