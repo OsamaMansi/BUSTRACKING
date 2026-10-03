@@ -1,10 +1,22 @@
 const socket = io();
 
+// ==========================================
+// [إضافة] دالة تسجيل الخروج للمدير
+// ==========================================
+function logout() {
+    localStorage.removeItem('currentUser');
+    window.location.href = '/login.html';
+}
+
 function showSection(sectionId) {
     document.querySelectorAll('.section-content').forEach(s => s.style.display = 'none');
     document.querySelectorAll('.sidebar ul li').forEach(li => li.classList.remove('active'));
     document.getElementById(sectionId + '-section').style.display = 'block';
-    event.currentTarget.classList.add('active');
+    
+    // التحقق من وجود event لمنع أخطاء النقر على أزرار غير مرتبطة بالقائمة مباشرة
+    if (event && event.currentTarget && event.currentTarget.hasAttribute('onclick')) {
+        event.currentTarget.classList.add('active');
+    }
 
     if(sectionId === 'trips') { fetchTrips(); loadTripDropdowns(); }
     if(sectionId === 'users') fetchUsers();
@@ -94,7 +106,7 @@ async function fetchTrips() {
             const safeTimeStr = t.scheduled_time;
 
             return `<tr>
-                <!-- [تعديل] إظهار رقم الـ ID للسائق بجانب اسمه في الجدول -->
+                <!-- إظهار رقم الـ ID للسائق بجانب اسمه في الجدول -->
                 <td>(ID: ${t.driver_id}) ${t.driver_name}</td>
                 <td>${t.bus_plate}</td>
                 <td>${t.route_name}</td>
@@ -209,7 +221,9 @@ function sendAlertToDriver(driverName, driverId) {
 // ================= إدارة المستخدمين =================
 let isEditingUser = false;
 async function fetchUsers() {
-    const res = await fetch('/api/users'); const users = await res.json();
+    const res = await fetch('/api/users'); 
+    const users = await res.json();
+    
     document.getElementById('usersTableBody').innerHTML = users.map(u => {
         // ترجمة الصلاحيات للعربية للعرض في الجدول
         let roleAr = '';
@@ -219,32 +233,77 @@ async function fetchUsers() {
         else if(u.role === 'escort') roleAr = 'مراقب 🧑‍🏫';
         else roleAr = u.role;
 
-        return`<tr>
+        // معالجة الأسماء التي تحتوي على علامات تنصيص لمنع تعطل الأزرار
+        const safeName = u.full_name ? u.full_name.replace(/'/g, "\\'") : '';
 
-        <td>${u.full_name}</td><td>${u.phone || '-'}</td><td>${u.email || '-'}</td><td>${u.role}</td>
+        // [تصحيح] تم إصلاح خطأ الأقواس هنا وتفعيل المتغير roleAr
+        return `<tr>
+        <td>${u.full_name}</td>
+        <td>${u.phone || '-'}</td>
+        <td>${u.email || '-'}</td>
+        <td style="font-weight:bold;">${roleAr}</td>
         <td>${u.is_active ? '<span class="status-active">فعال</span>' : '<span class="status-inactive">موقوف</span>'}</td>
         <td>
-            <button class="btn-edit" onclick="editUser(${u.id}, '${u.full_name}', '${u.email || ''}', '${u.phone || ''}', '${u.role}')">✏️</button>
+            <button class="btn-edit" onclick="editUser(${u.id}, '${safeName}', '${u.email || ''}', '${u.phone || ''}', '${u.role}')">✏️</button>
             <button class="${u.is_active ? 'btn-stop' : 'btn-start'}" onclick="toggleUser(${u.id}, ${!u.is_active})">${u.is_active ? 'إيقاف' : 'تفعيل'}</button>
             <button class="btn-delete" onclick="deleteUser(${u.id})">🗑️</button>
-        </td></tr>`).join('');
+        </td></tr>`;
+    }).join(''); // تم نقل القوس ليكون بعد إغلاق الدالة وليس بداخل النص
 }
+
 document.getElementById('userForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const data = { full_name: document.getElementById('fullName').value, email: document.getElementById('email').value, phone: document.getElementById('phone').value, password: document.getElementById('password').value, role: document.getElementById('role').value };
+    const data = { 
+        full_name: document.getElementById('fullName').value, 
+        email: document.getElementById('email').value, 
+        phone: document.getElementById('phone').value, 
+        password: document.getElementById('password').value, 
+        role: document.getElementById('role').value 
+    };
     const id = document.getElementById('userId').value;
-    const res = await fetch(isEditingUser ? `/api/users/${id}` : '/api/users', { method: isEditingUser ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+    const res = await fetch(isEditingUser ? `/api/users/${id}` : '/api/users', { 
+        method: isEditingUser ? 'PUT' : 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify(data) 
+    });
     if(res.ok) { resetUserForm(); fetchUsers(); }
 });
+
 function editUser(id, name, email, phone, role) {
-    isEditingUser = true; document.getElementById('userFormTitle').innerText = 'تعديل المستخدم'; document.getElementById('userCancelBtn').style.display = 'block';
-    document.getElementById('userId').value = id; document.getElementById('fullName').value = name; document.getElementById('email').value = email; document.getElementById('phone').value = phone; document.getElementById('role').value = role; document.getElementById('password').required = false;
+    isEditingUser = true; 
+    document.getElementById('userFormTitle').innerText = 'تعديل المستخدم'; 
+    document.getElementById('userCancelBtn').style.display = 'block';
+    document.getElementById('userId').value = id; 
+    document.getElementById('fullName').value = name; 
+    document.getElementById('email').value = email; 
+    document.getElementById('phone').value = phone; 
+    document.getElementById('role').value = role; 
+    document.getElementById('password').required = false;
 }
+
 function resetUserForm() {
-    isEditingUser = false; document.getElementById('userForm').reset(); document.getElementById('userId').value = ''; document.getElementById('userCancelBtn').style.display = 'none'; document.getElementById('password').required = true;
+    isEditingUser = false; 
+    document.getElementById('userForm').reset(); 
+    document.getElementById('userId').value = ''; 
+    document.getElementById('userCancelBtn').style.display = 'none'; 
+    document.getElementById('password').required = true;
 }
-async function toggleUser(id, active) { await fetch(`/api/users/${id}/toggle-status`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: active }) }); fetchUsers(); }
-async function deleteUser(id) { if(confirm('تأكيد الحذف؟')) { await fetch(`/api/users/${id}`, { method: 'DELETE' }); fetchUsers(); } }
+
+async function toggleUser(id, active) { 
+    await fetch(`/api/users/${id}/toggle-status`, { 
+        method: 'PATCH', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ is_active: active }) 
+    }); 
+    fetchUsers(); 
+}
+
+async function deleteUser(id) { 
+    if(confirm('تأكيد الحذف؟')) { 
+        await fetch(`/api/users/${id}`, { method: 'DELETE' }); 
+        fetchUsers(); 
+    } 
+}
 
 // ================= إدارة الحافلات =================
 let isEditingBus = false;
@@ -258,6 +317,7 @@ async function fetchBuses() {
             <button class="btn-delete" onclick="deleteBus(${b.id})">🗑️</button>
         </td></tr>`).join('');
 }
+
 document.getElementById('busForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const data = { plate_number: document.getElementById('plateNumber').value, capacity: document.getElementById('capacity').value };
@@ -265,6 +325,7 @@ document.getElementById('busForm').addEventListener('submit', async (e) => {
     const res = await fetch(isEditingBus ? `/api/buses/${id}` : '/api/buses', { method: isEditingBus ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
     if(res.ok) { resetBusForm(); fetchBuses(); }
 });
+
 function editBus(id, plate, cap) {
     isEditingBus = true; document.getElementById('busCancelBtn').style.display = 'block';
     document.getElementById('busId').value = id; document.getElementById('plateNumber').value = plate; document.getElementById('capacity').value = cap;
@@ -278,15 +339,18 @@ let isEditingRoute = false;
 async function fetchRoutes() {
     const res = await fetch('/api/routes'); const routes = await res.json();
     document.getElementById('routesTableBody').innerHTML = routes.map(r => {
+        // معالجة علامات التنصيص
         const desc = r.description ? r.description.replace(/'/g, "\\'") : '';
+        const rName = r.route_name ? r.route_name.replace(/'/g, "\\'") : '';
         return `<tr><td>${r.route_name}</td><td>${r.description || '-'}</td>
         <td>
-            <button class="btn-start" onclick="openMapModal(${r.id}, '${r.route_name}', '${desc}', ${r.allowed_deviation_meters || 100})">🗺️ إدارة المحطات</button>
-            <button class="btn-edit" onclick="editRoute(${r.id}, '${r.route_name}', '${desc}')">✏️</button>
+            <button class="btn-start" onclick="openMapModal(${r.id}, '${rName}', '${desc}', ${r.allowed_deviation_meters || 100})">🗺️ إدارة المحطات</button>
+            <button class="btn-edit" onclick="editRoute(${r.id}, '${rName}', '${desc}')">✏️</button>
             <button class="btn-delete" onclick="deleteRoute(${r.id})">🗑️</button>
         </td></tr>`;
     }).join('');
 }
+
 document.getElementById('routeForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const data = { route_name: document.getElementById('routeName').value, description: document.getElementById('routeDesc').value };
@@ -294,12 +358,25 @@ document.getElementById('routeForm').addEventListener('submit', async (e) => {
     const res = await fetch(isEditingRoute ? `/api/routes/${id}` : '/api/routes', { method: isEditingRoute ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
     if(res.ok) { resetRouteForm(); fetchRoutes(); }
 });
+
 function editRoute(id, name, desc) {
     isEditingRoute = true; document.getElementById('routeCancelBtn').style.display = 'block';
     document.getElementById('routeId').value = id; document.getElementById('routeName').value = name; document.getElementById('routeDesc').value = desc;
 }
-function resetRouteForm() { isEditingDate = false; document.getElementById('routeForm').reset(); document.getElementById('routeId').value = ''; document.getElementById('routeCancelBtn').style.display = 'none'; }
-async function deleteRoute(id) { if(confirm('تأكيد الحذف؟')) { await fetch(`/api/routes/${id}`, { method: 'DELETE' }); fetchRoutes(); } }
+
+function resetRouteForm() { 
+    isEditingRoute = false; // [تصحيح] كانت مكتوبة isEditingDate بالخطأ في الكود السابق
+    document.getElementById('routeForm').reset(); 
+    document.getElementById('routeId').value = ''; 
+    document.getElementById('routeCancelBtn').style.display = 'none'; 
+}
+
+async function deleteRoute(id) { 
+    if(confirm('تأكيد الحذف؟')) { 
+        await fetch(`/api/routes/${id}`, { method: 'DELETE' }); 
+        fetchRoutes(); 
+    } 
+}
 
 // بدء التشغيل
 fetchTrips();

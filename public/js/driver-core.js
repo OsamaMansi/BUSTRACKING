@@ -146,22 +146,32 @@ function startCountdownTimer(targetTimeStr) {
     }, 1000);
 }
 
-// عداد التوقف المؤقت والمكوث في المحطة
+// عداد التوقف المؤقت والمكوث في المحطة (تحديث: مفتاح تشغيل وإيقاف)
 function startDwellCountdown(durationSeconds = 120) {
     const timerDisplay = document.getElementById('dwellTimerDisplay');
     const btnDwell = document.getElementById('btnDwellStop');
     if (!timerDisplay) return;
 
+    // 1. إذا كان العداد يعمل مسبقاً، قم بإيقافه (استئناف المسير)
+    if (dwellInterval) {
+        clearInterval(dwellInterval);
+        dwellInterval = null;
+        timerDisplay.style.display = 'none';
+        if (btnDwell) {
+            btnDwell.style.background = '#17a2b8';
+            btnDwell.innerText = '🛑 توقف مؤقت جديد في المحطة';
+        }
+        return;
+    }
+
+    // 2. إذا لم يكن العداد يعمل، قم بتشغيله
     timerDisplay.style.display = 'block';
     if(btnDwell) {
         btnDwell.style.background = '#6c757d';
-        btnDwell.innerText = '🚶‍♂️ السائق في وضع المكوث / التوقف المؤقت';
+        btnDwell.innerText = '🚶‍♂️ استئناف المسير (إنهاء التوقف)';
     }
     
     let remainingTime = durationSeconds;
-
-    if (dwellInterval) clearInterval(dwellInterval);
-
     dwellInterval = setInterval(() => {
         const mins = Math.floor(remainingTime / 60);
         const secs = remainingTime % 60;
@@ -169,6 +179,7 @@ function startDwellCountdown(durationSeconds = 120) {
 
         if (remainingTime <= 0) {
             clearInterval(dwellInterval);
+            dwellInterval = null;
             timerDisplay.innerHTML = "🔔 انتهى وقت المكوث المقدر! يمكنك متابعة المسير.";
             if(btnDwell) {
                 btnDwell.style.background = '#17a2b8';
