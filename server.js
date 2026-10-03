@@ -17,6 +17,22 @@ const io = new Server(server, {
     cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
+// ====== مسارات إعدادات المؤسسة ======
+app.get('/api/settings', async (req, res) => {
+    const { data, error } = await supabase.from('settings').select('*').eq('id', 1).single();
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data || {});
+});
+
+app.put('/api/settings', async (req, res) => {
+    const { company_name, logo_url, contact_phone, contact_email, address } = req.body;
+    const { data, error } = await supabase.from('settings')
+        .upsert({ id: 1, company_name, logo_url, contact_phone, contact_email, address, updated_at: new Date() })
+        .select();
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ message: 'تم حفظ إعدادات المؤسسة بنجاح', data });
+});
+
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());

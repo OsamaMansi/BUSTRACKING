@@ -46,20 +46,23 @@
     </style>
 </head>
 <body>
-    <div class="sidebar">
-        <h2>لوحة الإدارة ⚙️</h2>
-        <ul>
-            <li class="active" onclick="showSection('trips')">📅 إدارة الرحلات</li>
-            <li onclick="showSection('users')">👥 إدارة المستخدمين</li>
-            <li onclick="showSection('buses')">🚌 إدارة الحافلات</li>
-            <li onclick="showSection('routes')">🗺️ المسارات والمحطات</li>
-            <li style="background: #dc3545; color: white; text-align: center; margin-top: 20px; border-radius: 4px;" onclick="logout()">🚪 تسجيل الخروج</li>
-        </ul>
-    </div>
+
+<div class="sidebar">
+    <h2>لوحة الإدارة ⚙️</h2>
+    <ul>
+        <li class="active" onclick="showSection('trips')">📅 إدارة الرحلات</li>
+        <li onclick="showSection('monitoring')">🌍 المراقبة الحية للأسطول</li>
+        <li onclick="showSection('users')">👥 إدارة المستخدمين</li>
+        <li onclick="showSection('buses')">🚌 إدارة الحافلات</li>
+        <li onclick="showSection('routes')">🗺️ المسارات والمحطات</li>
+        <li onclick="showSection('settings')" style="border-top: 1px solid #555; margin-top: 10px; padding-top: 10px;">🏢 إعدادات المؤسسة</li>
+        <li style="background: #dc3545; color: white; text-align: center; margin-top: 20px; border-radius: 4px;" onclick="logout()">🚪 تسجيل الخروج</li>
+    </ul>
+</div>
     
     <div class="content">
-    	    <!-- قسم الرحلات -->
-	    <!-- قسم الرحلات -->
+    	    
+	    
 <!-- قسم الرحلات -->
         <div id="trips-section" class="section-content">
             <div class="card">
@@ -82,6 +85,21 @@
                 <button type="button" class="btn-edit" onclick="copyNextMonthTrips()">🔄 نسخ جميع رحلات الشهر الحالي للشهر القادم</button>
             </div>
 
+<!-- شريط الفرز الذكي للرحلات -->
+<div class="filter-bar" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; gap: 15px; align-items: center; border: 1px solid #ddd;">
+    <strong style="color: #333;">🔍 فرز الرحلات:</strong>
+    <select id="filterTripStatus" onchange="renderFilteredTrips()" style="padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+        <option value="all" selected>جميع الحالات</option>
+        <option value="active_now">🟢 الرحلات الجارية الآن فقط</option>
+        <option value="pending">⏳ المجدولة (لم تبدأ)</option>
+        <option value="completed">✔️ المكتملة</option>
+        <option value="cancelled">❌ الملغاة</option>
+    </select>
+    <select id="filterTripDriver" onchange="renderFilteredTrips()" style="padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+        <!-- سيتم تعبئتها برمجياً بأسماء السائقين -->
+        <option value="all">جميع السائقين 🚌</option>
+    </select>
+</div>
             <div class="card">
                 <h3>جدول الرحلات</h3>
                 <table>
@@ -196,6 +214,61 @@
             <div id="mapContainer" style="flex:1; width:100%; border: 2px solid #ccc; border-radius: 4px;"></div>
         </div>
     </div>
+
+<!-- ================= قسم المراقبة العامة للأسطول ================= -->
+<div id="monitoring-section" class="section-content" style="display: none;">
+    <div class="header-flex" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <h2>🌍 مركز المراقبة والتحكم اللحظي (Live Operations)</h2>
+        <button class="btn-start" onclick="fetchActiveFleetData()">🔄 تحديث البيانات</button>
+    </div>
+    
+    <div style="display: flex; gap: 20px; height: 70vh;">
+        <!-- القائمة الجانبية للحافلات -->
+        <div style="width: 30%; background: #fff; border: 1px solid #ddd; border-radius: 8px; overflow-y: auto; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+            <div style="background: #343a40; color: white; padding: 15px; position: sticky; top: 0;">
+                <h3 style="margin: 0; font-size: 16px;">🚌 حالة الأسطول</h3>
+            </div>
+            <div id="globalFleetList" style="padding: 10px;">
+                <!-- سيتم تعبئة الحافلات هنا برمجياً -->
+            </div>
+        </div>
+        
+        <!-- خريطة التتبع -->
+        <div style="width: 70%; background: #fff; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+            <div id="globalMonitoringMapDiv" style="width: 100%; height: 100%;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ================= قسم إعدادات المؤسسة ================= -->
+<div id="settings-section" class="section-content" style="display: none;">
+    <h2>🏢 إعدادات هوية المؤسسة والنظام</h2>
+    <div class="form-container" style="max-width: 600px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+        <form id="settingsForm">
+            <div class="form-group">
+                <label>اسم المؤسسة / الشركة المعتمد:</label>
+                <input type="text" id="settingCompanyName" required placeholder="مثال: شركة آفاق لحلول الطاقة">
+            </div>
+            <div class="form-group">
+                <label>رابط شعار المؤسسة (Logo URL):</label>
+                <input type="url" id="settingLogoUrl" placeholder="https://example.com/logo.png">
+            </div>
+            <div class="form-group">
+                <label>رقم هاتف التواصل:</label>
+                <input type="text" id="settingPhone" placeholder="رقم هاتف الإدارة أو الطوارئ">
+            </div>
+            <div class="form-group">
+                <label>البريد الإلكتروني:</label>
+                <input type="email" id="settingEmail" placeholder="info@company.com">
+            </div>
+            <div class="form-group">
+                <label>العنوان المادي للمؤسسة:</label>
+                <textarea id="settingAddress" rows="3" placeholder="المدينة، الشارع، المبنى..."></textarea>
+            </div>
+            <button type="submit" class="btn-start" style="width: 100%; font-size: 16px; padding: 12px;">💾 حفظ الإعدادات وتطبيقها على كافة الشاشات والتقارير</button>
+        </form>
+    </div>
+</div>
 
     <!-- استدعاء ملفات البرمجة المنفصلة -->
     <script src="/js/admin-core.js"></script>

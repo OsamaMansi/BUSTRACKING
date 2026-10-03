@@ -1,7 +1,7 @@
 const socket = io();
 
 // ==========================================
-// [إضافة] دالة تسجيل الخروج للمدير
+// دالة تسجيل الخروج للمدير
 // ==========================================
 function logout() {
     localStorage.removeItem('currentUser');
@@ -22,10 +22,13 @@ function showSection(sectionId) {
     if(sectionId === 'users') fetchUsers();
     if(sectionId === 'buses') fetchBuses();
     if(sectionId === 'routes') fetchRoutes();
+    // [إضافة] تشغيل خريطة المراقبة العامة عند فتح قسم المراقبة
+    if(sectionId === 'monitoring') initGlobalMonitoringMap();
 }
 
-// ================= إدارة الرحلات =================
+// ================= إدارة الرحلات (مدمج مع نظام الفرز والترتيب والحماية) =================
 let isEditingTrip = false;
+let globalTripsCache = []; // [إضافة] لتخزين الرحلات محلياً وتسريع عملية الفرز
 
 // دالة دقيقة لتنسيق التاريخ المحلي لحقول datetime-local دون أخطاء توقيت
 function formatLocalDateTime(dateString) {
@@ -65,24 +68,28 @@ async function copyNextMonthTrips() {
     }
 }
 
-// ==========================================
-// [تعديل] تحميل القوائم المنسدلة للجدولة مع إظهار الـ IDs
-// ==========================================
+// تحميل القوائم المنسدلة للجدولة مع إظهار الـ IDs
 async function loadTripDropdowns() {
     try {
-        // 1. تحميل السائقين مع إظهار الـ ID
         const resU = await fetch('/api/users'); 
         const users = await resU.json();
-        document.getElementById('tripDriver').innerHTML = '<option value="" disabled selected>-- اختر السائق --</option>' + 
-            users.filter(u => u.role === 'driver').map(d => `<option value="${d.id}">(ID: ${d.id}) ${d.full_name}</option>`).join('');
+        const drivers = users.filter(u => u.role === 'driver');
 
-        // 2. تحميل الحافلات مع إظهار الـ ID
+        document.getElementById('tripDriver').innerHTML = '<option value="" disabled selected>-- اختر السائق --</option>' + 
+            drivers.map(d => `<option value="${d.id}">(ID: ${d.id}) ${d.full_name}</option>`).join('');
+
+        // [إضافة] تعبئة قائمة فلترة السائقين إن وجدت في واجهة HTML
+        const filterDriverSelect = document.getElementById('filterTripDriver');
+        if(filterDriverSelect) {
+            filterDriverSelect.innerHTML = '<option value="all">جميع السائقين 🚌</option>' + 
+                drivers.map(d => `<option value="${d.id}">${d.full_name}</option>`).join('');
+        }
+
         const resB = await fetch('/api/buses'); 
         const buses = await resB.json();
         document.getElementById('tripBus').innerHTML = '<option value="" disabled selected>-- اختر الحافلة --</option>' + 
             buses.map(b => `<option value="${b.id}">(ID: ${b.id}) ${b.plate_number} (سعة: ${b.capacity})</option>`).join('');
 
-        // 3. تحميل المسارات مع إظهار الـ ID
         const resR = await fetch('/api/routes'); 
         const routes = await resR.json();
         document.getElementById('tripRoute').innerHTML = '<option value="" disabled selected>-- اختر المسار --</option>' + 
@@ -92,36 +99,77 @@ async function loadTripDropdowns() {
     }
 }
 
-// ==========================================
-// [تعديل] جلب جدول الرحلات وإظهار ID السائق في الجدول
-// ==========================================
+// جلب الرحلات (تم فصلها عن الطباعة لتسريع الفرز المباشر)
 async function fetchTrips() {
     try {
         const res = await fetch('/api/trips');
-        const trips = await res.json();
-        document.getElementById('tripsTableBody').innerHTML = trips.map(t => {
-            let statusAr = t.status === 'pending' ? '<span class="status-pending">مجدولة ⏳</span>' : t.status === 'active' ? '<span class="status-active">جارية 🟢</span>' : '<span style="color:gray;">مكتملة ✔️</span>';
-            let alertBtn = (t.status === 'active' || t.status === 'pending') ? `<button class="btn-alert" onclick="sendAlertToDriver('${t.driver_name}', ${t.id})">🔔 تنبيه</button>` : '';
-            
-            const safeTimeStr = t.scheduled_time;
-
-            return `<tr>
-                <!-- إظهار رقم الـ ID للسائق بجانب اسمه في الجدول -->
-                <td>(ID: ${t.driver_id}) ${t.driver_name}</td>
-                <td>${t.bus_plate}</td>
-                <td>${t.route_name}</td>
-                <td dir="ltr">${new Date(t.scheduled_time).toLocaleString('ar-EG')}</td>
-                <td>${statusAr}</td>
-                <td>
-                    ${alertBtn}
-                    <button class="btn-edit" onclick="editTrip(${t.id}, ${t.driver_id}, ${t.bus_id}, ${t.route_id}, '${safeTimeStr}')">✏️ تعديل</button>
-                    <button class="btn-delete" onclick="deleteTrip(${t.id})">🗑️ حذف</button>
-                </td>
-            </tr>`;
-        }).join('');
+        globalTripsCache = await res.json(); // حفظ النسخة الأصلية
+        renderFilteredTrips(); // استدعاء دالة الفرز والطباعة
     } catch (err) {
         console.error('خطأ في جلب الرحلات للجدول:', err);
     }
+}
+
+// [إضافة] دالة مسؤولة عن الفرز، الترتيب العكسي، والطباعة، وحماية الرحلات المنتهية
+function renderFilteredTrips() {
+    const statusFilter = document.getElementById('filterTripStatus') ? document.getElementById('filterTripStatus').value : 'all';
+    const driverFilter = document.getElementById('filterTripDriver') ? document.getElementById('filterTripDriver').value : 'all';
+
+    let filtered = [...globalTripsCache];
+
+    // الفرز حسب الحالة
+    if (statusFilter === 'active_now') {
+        filtered = filtered.filter(t => t.status === 'active');
+    } else if (statusFilter !== 'all') {
+        filtered = filtered.filter(t => t.status === statusFilter);
+    }
+
+    // الفرز حسب السائق
+    if (driverFilter !== 'all') {
+        filtered = filtered.filter(t => String(t.driver_id) === String(driverFilter));
+    }
+
+    // الترتيب العكسي (الأحدث أولاً)
+    filtered.sort((a, b) => new Date(b.scheduled_time) - new Date(a.scheduled_time));
+
+    const tbody = document.getElementById('tripsTableBody');
+    if (!tbody) return;
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; font-weight: bold; padding: 20px;">لا توجد رحلات تطابق معايير الفرز الحالية</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = filtered.map(t => {
+        let statusAr = t.status === 'pending' ? '<span class="status-pending">مجدولة ⏳</span>' : 
+                       t.status === 'active' ? '<span class="status-active">جارية 🟢</span>' : 
+                       t.status === 'completed' ? '<span style="color:green; font-weight:bold;">مكتملة ✔️</span>' : 
+                       '<span style="color:red; font-weight:bold;">ملغاة ❌</span>';
+        
+        let alertBtn = (t.status === 'active' || t.status === 'pending') ? `<button class="btn-alert" onclick="sendAlertToDriver('${t.driver_name}', ${t.id})">🔔 تنبيه</button>` : '';
+        const safeTimeStr = t.scheduled_time;
+
+        // تطبيق شرط عدم التعديل على الرحلات المنتهية أو الملغاة
+        let actionButtons = '';
+        if (t.status === 'completed' || t.status === 'cancelled') {
+            actionButtons = `<span style="color: #666; font-size: 12px; font-weight: bold;">🔒 سجل محمي (منتهية/ملغاة)</span>`;
+        } else {
+            actionButtons = `
+                ${alertBtn}
+                <button class="btn-edit" onclick="editTrip(${t.id}, ${t.driver_id}, ${t.bus_id}, ${t.route_id}, '${safeTimeStr}')">✏️ تعديل</button>
+                <button class="btn-delete" onclick="deleteTrip(${t.id})">🗑️ حذف</button>
+            `;
+        }
+
+        return `<tr>
+            <td>(ID: ${t.driver_id}) ${t.driver_name}</td>
+            <td>${t.bus_plate}</td>
+            <td>${t.route_name}</td>
+            <td dir="ltr">${new Date(t.scheduled_time).toLocaleString('ar-EG')}</td>
+            <td>${statusAr}</td>
+            <td>${actionButtons}</td>
+        </tr>`;
+    }).join('');
 }
 
 document.getElementById('tripForm').addEventListener('submit', async (e) => {
@@ -218,14 +266,13 @@ function sendAlertToDriver(driverName, driverId) {
     }
 }
 
-// ================= إدارة المستخدمين =================
+// ================= إدارة المستخدمين (دون أي تغيير أو حذف) =================
 let isEditingUser = false;
 async function fetchUsers() {
     const res = await fetch('/api/users'); 
     const users = await res.json();
     
     document.getElementById('usersTableBody').innerHTML = users.map(u => {
-        // ترجمة الصلاحيات للعربية للعرض في الجدول
         let roleAr = '';
         if(u.role === 'driver') roleAr = 'سائق 🚌';
         else if(u.role === 'passenger') roleAr = 'راكب 🧍‍♂️';
@@ -233,10 +280,8 @@ async function fetchUsers() {
         else if(u.role === 'escort') roleAr = 'مراقب 🧑‍🏫';
         else roleAr = u.role;
 
-        // معالجة الأسماء التي تحتوي على علامات تنصيص لمنع تعطل الأزرار
         const safeName = u.full_name ? u.full_name.replace(/'/g, "\\'") : '';
 
-        // [تصحيح] تم إصلاح خطأ الأقواس هنا وتفعيل المتغير roleAr
         return `<tr>
         <td>${u.full_name}</td>
         <td>${u.phone || '-'}</td>
@@ -248,7 +293,7 @@ async function fetchUsers() {
             <button class="${u.is_active ? 'btn-stop' : 'btn-start'}" onclick="toggleUser(${u.id}, ${!u.is_active})">${u.is_active ? 'إيقاف' : 'تفعيل'}</button>
             <button class="btn-delete" onclick="deleteUser(${u.id})">🗑️</button>
         </td></tr>`;
-    }).join(''); // تم نقل القوس ليكون بعد إغلاق الدالة وليس بداخل النص
+    }).join('');
 }
 
 document.getElementById('userForm').addEventListener('submit', async (e) => {
@@ -305,7 +350,7 @@ async function deleteUser(id) {
     } 
 }
 
-// ================= إدارة الحافلات =================
+// ================= إدارة الحافلات (دون أي تغيير أو حذف) =================
 let isEditingBus = false;
 async function fetchBuses() {
     const res = await fetch('/api/buses'); const buses = await res.json();
@@ -334,12 +379,11 @@ function resetBusForm() { isEditingBus = false; document.getElementById('busForm
 async function toggleBus(id, active) { await fetch(`/api/buses/${id}/toggle-status`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: active }) }); fetchBuses(); }
 async function deleteBus(id) { if(confirm('تأكيد الحذف؟')) { await fetch(`/api/buses/${id}`, { method: 'DELETE' }); fetchBuses(); } }
 
-// ================= إدارة المسارات =================
+// ================= إدارة المسارات (مستعاد كما كان بالضبط دون فقدان) =================
 let isEditingRoute = false;
 async function fetchRoutes() {
     const res = await fetch('/api/routes'); const routes = await res.json();
     document.getElementById('routesTableBody').innerHTML = routes.map(r => {
-        // معالجة علامات التنصيص
         const desc = r.description ? r.description.replace(/'/g, "\\'") : '';
         const rName = r.route_name ? r.route_name.replace(/'/g, "\\'") : '';
         return `<tr><td>${r.route_name}</td><td>${r.description || '-'}</td>
@@ -359,13 +403,14 @@ document.getElementById('routeForm').addEventListener('submit', async (e) => {
     if(res.ok) { resetRouteForm(); fetchRoutes(); }
 });
 
+// [إصلاح] تمت استعادة هذه الدالة كما كانت بالضبط في كودك القديم
 function editRoute(id, name, desc) {
     isEditingRoute = true; document.getElementById('routeCancelBtn').style.display = 'block';
     document.getElementById('routeId').value = id; document.getElementById('routeName').value = name; document.getElementById('routeDesc').value = desc;
 }
 
 function resetRouteForm() { 
-    isEditingRoute = false; // [تصحيح] كانت مكتوبة isEditingDate بالخطأ في الكود السابق
+    isEditingRoute = false; 
     document.getElementById('routeForm').reset(); 
     document.getElementById('routeId').value = ''; 
     document.getElementById('routeCancelBtn').style.display = 'none'; 
@@ -377,6 +422,102 @@ async function deleteRoute(id) {
         fetchRoutes(); 
     } 
 }
+
+// ==========================================
+// [إضافة] شاشة المراقبة العامة للباصات (Global Fleet Monitoring)
+// ==========================================
+let globalMonitoringMap = null;
+let monitoringMarkers = {}; 
+
+function initGlobalMonitoringMap() {
+    if (!globalMonitoringMap) {
+        globalMonitoringMap = L.map('globalMonitoringMapDiv').setView([31.95, 35.91], 12);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(globalMonitoringMap);
+    } else {
+        globalMonitoringMap.invalidateSize();
+    }
+    fetchActiveFleetData();
+}
+
+async function fetchActiveFleetData() {
+    try {
+        const res = await fetch('/api/trips'); 
+        const trips = await res.json();
+        
+        const sidebarList = document.getElementById('globalFleetList');
+        if(!sidebarList) return;
+
+        sidebarList.innerHTML = trips.map(t => {
+            let badgeColor = t.status === 'active' ? '#28a745' : t.status === 'pending' ? '#ffc107' : '#6c757d';
+            let statusText = t.status === 'active' ? '🟢 سائر الآن' : t.status === 'pending' ? '⏳ مجدولة' : '✔ منتهية/متوقفة';
+            return `
+                <div style="padding: 10px; border-bottom: 1px solid #eee; cursor: pointer;" onclick="focusOnBus(${t.id})">
+                    <strong>باص: ${t.bus_plate}</strong> <span style="font-size:11px; background:${badgeColor}; color:white; padding:2px 6px; border-radius:4px;">${statusText}</span><br>
+                    <small>السائق: ${t.driver_name} | المسار: ${t.route_name}</small>
+                </div>
+            `;
+        }).join('');
+    } catch(err) { console.error("خطأ في تحديث الأسطول العام:", err); }
+}
+
+function focusOnBus(tripId) {
+    alert("سيتم التركيز على الحافلة رقم الرحلة: " + tripId);
+}
+
+socket.on('busLocationUpdated', (data) => {
+    console.log("تحديث موقع باص على الشاشة العامة:", data);
+});
+
+// ================= إعدادات المؤسسة =================
+async function fetchSettings() {
+    try {
+        const res = await fetch('/api/settings');
+        const settings = await res.json();
+        if (settings.company_name) {
+            document.getElementById('settingCompanyName').value = settings.company_name || '';
+            document.getElementById('settingLogoUrl').value = settings.logo_url || '';
+            document.getElementById('settingPhone').value = settings.contact_phone || '';
+            document.getElementById('settingEmail').value = settings.contact_email || '';
+            document.getElementById('settingAddress').value = settings.address || '';
+        }
+    } catch (err) {
+        console.error('خطأ في جلب إعدادات المؤسسة:', err);
+    }
+}
+
+document.getElementById('settingsForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const data = {
+        company_name: document.getElementById('settingCompanyName').value,
+        logo_url: document.getElementById('settingLogoUrl').value,
+        contact_phone: document.getElementById('settingPhone').value,
+        contact_email: document.getElementById('settingEmail').value,
+        address: document.getElementById('settingAddress').value
+    };
+
+    try {
+        const res = await fetch('/api/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await res.json();
+        if (res.ok) {
+            alert('تم حفظ إعدادات المؤسسة بنجاح ✅');
+        } else {
+            alert('خطأ أثناء الحفظ: ' + result.error);
+        }
+    } catch (err) {
+        alert('حدث خطأ في الاتصال بالسيرفر.');
+    }
+});
+
+// تعديل بسيط على دالة showSection لتشمل جلب الإعدادات عند النقر عليها
+const originalShowSection = showSection;
+showSection = function(sectionId) {
+    originalShowSection(sectionId);
+    if(sectionId === 'settings') { fetchSettings(); }
+};
 
 // بدء التشغيل
 fetchTrips();
