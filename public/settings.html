@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>إعدادات المؤسسة</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; display: flex; background-color: #f4f6f9; height: 100vh; }
+        .sidebar { width: 250px; background: #343a40; color: white; padding: 20px; box-sizing: border-box; flex-shrink:0; }
+        .sidebar h2 { margin-top: 0; font-size: 20px; text-align: center; border-bottom: 1px solid #4f5962; padding-bottom: 10px; }
+        .sidebar ul { list-style: none; padding: 0; }
+        .sidebar ul li { padding: 15px; cursor: pointer; border-bottom: 1px solid #4f5962; font-weight: bold; transition: 0.3s;}
+        .sidebar ul li:hover, .sidebar ul li.active { background: #007bff; }
+        
+        .content { flex: 1; padding: 40px; overflow-y: auto; }
+        .form-container { max-width: 600px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #ddd; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; font-weight: bold; margin-bottom: 8px; color: #333; }
+        input, textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-family: Arial; }
+        button { width: 100%; padding: 12px; background: #17a2b8; color: white; border: none; border-radius: 4px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        button:hover { background: #138496; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>لوحة الإدارة ⚙️</h2>
+        <ul>
+            <li onclick="window.location.href='/admin.html'">📅 الإدارة الرئيسية</li>
+            <li onclick="window.location.href='/monitoring.html'">🌍 المراقبة الحية للأسطول</li>
+            <li class="active" style="border-top: 1px solid #555; margin-top: 10px; padding-top: 10px;">🏢 إعدادات المؤسسة</li>
+            <li style="background: #dc3545; color: white; text-align: center; margin-top: 20px;" onclick="logout()">🚪 تسجيل الخروج</li>
+        </ul>
+    </div>
+    
+    <div class="content">
+        <div class="form-container">
+            <h2 style="margin-top: 0; border-bottom: 2px solid #17a2b8; padding-bottom: 10px;">🏢 إعدادات هوية المؤسسة</h2>
+            <form id="settingsForm">
+                <div class="form-group">
+                    <label>اسم المؤسسة / الشركة المعتمد:</label>
+                    <input type="text" id="settingCompanyName" required>
+                </div>
+                <div class="form-group" style="background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px dashed #ccc;">
+                    <label style="color: #007bff;">رفع شعار المؤسسة (Logo):</label>
+                    <input type="file" id="settingLogoFile" accept="image/*" onchange="previewLogo(event)" style="border: none; padding: 0;">
+                    <input type="hidden" id="settingLogoBase64">
+                    <div style="text-align: center; margin-top: 15px;">
+                        <img id="logoPreview" src="" style="max-width: 150px; display: none; border: 1px solid #ddd; padding: 5px; border-radius: 8px; background: #fff;">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>رقم هاتف التواصل:</label>
+                    <input type="text" id="settingPhone">
+                </div>
+                <div class="form-group">
+                    <label>البريد الإلكتروني:</label>
+                    <input type="email" id="settingEmail">
+                </div>
+                <div class="form-group">
+                    <label>العنوان المادي:</label>
+                    <textarea id="settingAddress" rows="3"></textarea>
+                </div>
+                <button type="submit">💾 حفظ الإعدادات</button>
+            </form>
+        </div>
+    </div>
+    <script src="/js/settings.js"></script>
+</body>
+</html>
